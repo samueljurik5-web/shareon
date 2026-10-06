@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Ilustračný obrázok">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00C2FF"/><stop offset="1" stop-color="#FF5EDB"/></linearGradient></defs>
+  <rect width="800" height="600" fill="#181B30"/>
+  <circle cx="620" cy="120" r="180" fill="url(#g)" opacity="0.25"/>
+  <circle cx="160" cy="520" r="140" fill="url(#g)" opacity="0.18"/>
+  <rect x="280" y="200" width="240" height="240" rx="40" fill="url(#g)" opacity="0.85" transform="rotate(12 400 320)"/>
+</svg>

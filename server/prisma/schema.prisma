@@ -1,0 +1,518 @@
+// ShareOn – Prisma schema
+// Money is always stored as integer cents (EUR) to avoid floating point errors.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Category {
+  GARDEN
+  SPORT
+  WORKSHOP
+  LEISURE
+  OTHER
+}
+
+enum ItemCondition {
+  NEW
+  VERY_GOOD
+  GOOD
+  USED
+  WORN
+}
+
+enum RentalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  ACTIVE
+  RETURN_PENDING
+  RETURNED
+  DISPUTED
+  COMPLETED
+}
+
+enum HandoverMethod {
+  PERSONAL_PICKUP
+  OWNER_DELIVERY
+  MEET_ELSEWHERE
+}
+
+enum HandoverType {
+  HANDOVER
+  RETURN
+}
+
+enum PartyRole {
+  OWNER
+  RENTER
+}
+
+/// Direction of a user-to-user review
+enum ReviewType {
+  RENTER_TO_OWNER
+  OWNER_TO_RENTER
+}
+
+enum ProtectionMode {
+  NONE
+  PROTECTION_FEE
+  INSURANCE
+}
+
+enum ProtectionStatus {
+  QUOTED
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  CLAIM_UNDER_REVIEW
+}
+
+enum DepositStatus {
+  NOT_REQUIRED
+  PENDING
+  HELD
+  RELEASE_REQUESTED
+  RELEASED
+  PARTIALLY_WITHHELD
+  WITHHELD
+  DISPUTED
+}
+
+enum ReportType {
+  ITEM_DAMAGED
+  ITEM_NOT_RETURNED
+  ITEM_DIFFERENT_THAN_DESCRIPTION
+  USER_BEHAVIOR
+  PAYMENT_PROBLEM
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  NEEDS_MORE_INFORMATION
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+  RESOLVED
+}
+
+enum EvidenceKind {
+  EVIDENCE
+  RESPONSE
+  ADMIN_NOTE_PUBLIC
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String
+  city         String
+  bio          String?
+  avatarUrl    String?
+  role         Role     @default(USER)
+  isActive     Boolean  @default(true)
+  /// Incremented on logout / deactivation to revoke all issued JWTs
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items           Item[]
+  rentalsAsRenter RentalRequest[]   @relation("RenterRentals")
+  rentalsAsOwner  RentalRequest[]   @relation("OwnerRentals")
+  reviewsWritten  Review[]          @relation("ReviewAuthor")
+  reviewsReceived Review[]          @relation("ReviewTarget")
+  itemReviews     ItemReview[]
+  favorites       Favorite[]
+  notifications   Notification[]
+  reports         DamageReport[]    @relation("Reporter")
+  reportsAgainst  DamageReport[]    @relation("ReportedUser")
+  evidence        ReportEvidence[]
+  decisions       AdminDecision[]
+  auditLogs       AuditLog[]
+  handoverRecords HandoverRecord[]
+  quotes          ProtectionQuote[]
+
+  @@index([role])
+  @@index([city])
+}
+
+model Item {
+  id                     String        @id @default(cuid())
+  ownerId                String
+  title                  String
+  category               Category
+  description            String
+  pricePerDayCents       Int
+  city                   String
+  condition              ItemCondition
+  availableFrom          DateTime      @db.Date
+  availableTo            DateTime      @db.Date
+  replacementValueCents  Int
+  serialNote             String?
+  isActive               Boolean       @default(true)
+  /// Set when an admin deactivates the listing – owner cannot re-activate
+  deactivatedByAdmin     Boolean       @default(false)
+  protectionEligible     Boolean       @default(true)
+  /// Owner declarations (right to offer, accurate description, damage disclosed, photos current)
+  declarationsAcceptedAt DateTime
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  owner     User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  images    ItemImage[]
+  rentals   RentalRequest[]
+  reviews   ItemReview[]
+  favorites Favorite[]
+  reports   DamageReport[]
+  quotes    ProtectionQuote[]
+
+  @@index([ownerId])
+  @@index([category, isActive])
+  @@index([city])
+  @@index([createdAt])
+  @@index([pricePerDayCents])
+}
+
+model ItemImage {
+  id        String   @id @default(cuid())
+  itemId    String
+  url       String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, position])
+}
+
+model RentalRequest {
+  id             String         @id @default(cuid())
+  itemId         String
+  renterId       String
+  ownerId        String
+  startDate      DateTime       @db.Date
+  endDate        DateTime       @db.Date
+  rentalDays     Int
+  message        String?
+  handoverMethod HandoverMethod
+  status         RentalStatus   @default(PENDING)
+
+  // Server-calculated price snapshot (cents)
+  pricePerDayCents   Int
+  rentalPriceCents   Int
+  protectionFeeCents Int
+  depositCents       Int
+  platformFeeCents   Int
+  totalCents         Int
+  currency           String         @default("EUR")
+  protectionMode     ProtectionMode
+
+  rulesAcceptedAt                DateTime
+  protectionDisclaimerAcceptedAt DateTime?
+
+  proposedStartDate DateTime? @db.Date
+  proposedEndDate   DateTime? @db.Date
+  ownerNote         String?
+
+  acceptedAt    DateTime?
+  rejectedAt    DateTime?
+  cancelledAt   DateTime?
+  cancelledById String?
+  activeAt      DateTime?
+  returnedAt    DateTime?
+  completedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item             Item              @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  renter           User              @relation("RenterRentals", fields: [renterId], references: [id], onDelete: Restrict)
+  owner            User              @relation("OwnerRentals", fields: [ownerId], references: [id], onDelete: Restrict)
+  reviews          Review[]
+  itemReview       ItemReview?
+  protectionQuotes ProtectionQuote[]
+  protection       ProtectionRecord?
+  deposit          Deposit?
+  handoverRecords  HandoverRecord[]
+  reports          DamageReport[]
+
+  @@index([itemId, status])
+  @@index([renterId, status])
+  @@index([ownerId, status])
+  @@index([startDate, endDate])
+}
+
+model Review {
+  id              String     @id @default(cuid())
+  rentalRequestId String
+  authorId        String
+  targetId        String
+  type            ReviewType
+  overall         Int
+  comment         String?
+  punctuality     Int?
+  communication   Int?
+  reliability     Int?
+  respectfulUse   Int?
+  onTimeReturn    Int?
+  isHidden        Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  rentalRequest RentalRequest @relation(fields: [rentalRequestId], references: [id], onDelete: Cascade)
+  author        User          @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  target        User          @relation("ReviewTarget", fields: [targetId], references: [id], onDelete: Restrict)
+
+  /// One review per direction per rental
+  @@unique([rentalRequestId, type])
+  @@index([targetId, isHidden])
+}
+
+model ItemReview {
+  id                  String   @id @default(cuid())
+  rentalRequestId     String   @unique
+  itemId              String
+  authorId            String
+  descriptionAccuracy Int
+  itemCondition       Int
+  valueForMoney       Int
+  handoverExperience  Int
+  overall             Int
+  comment             String?
+  isHidden            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  rentalRequest RentalRequest @relation(fields: [rentalRequestId], references: [id], onDelete: Cascade)
+  item          Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  author        User          @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([itemId, isHidden])
+}
+
+model ProtectionQuote {
+  id                    String         @id @default(cuid())
+  itemId                String?
+  rentalRequestId       String?
+  userId                String?
+  provider              String
+  mode                  ProtectionMode
+  isDemo                Boolean
+  replacementValueCents Int
+  protectedValueCents   Int
+  rentalDays            Int
+  feeCents              Int
+  /// Raw calculation inputs (category, risk signals, multipliers) for transparency
+  inputs                Json
+  expiresAt             DateTime
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  item          Item?          @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  rentalRequest RentalRequest? @relation(fields: [rentalRequestId], references: [id], onDelete: SetNull)
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([rentalRequestId])
+  @@index([itemId])
+}
+
+model ProtectionRecord {
+  id                  String           @id @default(cuid())
+  rentalRequestId     String           @unique
+  provider            String
+  mode                ProtectionMode
+  status              ProtectionStatus
+  isDemo              Boolean
+  feeCents            Int
+  protectedValueCents Int
+  externalReference   String?
+  idempotencyKey      String           @unique
+  cancelledAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  rentalRequest RentalRequest @relation(fields: [rentalRequestId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model Deposit {
+  id              String        @id @default(cuid())
+  rentalRequestId String        @unique
+  amountCents     Int
+  withheldCents   Int           @default(0)
+  currency        String        @default("EUR")
+  status          DepositStatus
+  provider        String
+  isSimulated     Boolean       @default(true)
+  idempotencyKey  String        @unique
+  heldAt          DateTime?
+  releasedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  rentalRequest RentalRequest @relation(fields: [rentalRequestId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model HandoverRecord {
+  id              String       @id @default(cuid())
+  rentalRequestId String
+  type            HandoverType
+  userId          String
+  partyRole       PartyRole
+  note            String?
+  /// Only for owner RETURN confirmation: whether the item came back in order
+  itemOk          Boolean?
+  confirmedAt     DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  rentalRequest RentalRequest   @relation(fields: [rentalRequestId], references: [id], onDelete: Cascade)
+  user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  photos        HandoverPhoto[]
+
+  @@unique([rentalRequestId, type, partyRole])
+}
+
+model HandoverPhoto {
+  id               String   @id @default(cuid())
+  handoverRecordId String
+  url              String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  handoverRecord HandoverRecord @relation(fields: [handoverRecordId], references: [id], onDelete: Cascade)
+}
+
+model DamageReport {
+  id                   String       @id @default(cuid())
+  /// Null only for listing reports (POST /api/items/:id/report) that are not tied to a rental
+  rentalRequestId      String?
+  itemId               String
+  reporterId           String
+  reportedUserId       String?
+  type                 ReportType
+  description          String
+  requestedAmountCents Int          @default(0)
+  approvedAmountCents  Int?
+  status               ReportStatus @default(OPEN)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  rentalRequest RentalRequest?   @relation(fields: [rentalRequestId], references: [id], onDelete: Restrict)
+  item          Item             @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  reporter      User             @relation("Reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reportedUser  User?            @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Restrict)
+  evidence      ReportEvidence[]
+  decisions     AdminDecision[]
+
+  @@index([status])
+  @@index([rentalRequestId])
+  @@index([reporterId])
+}
+
+model ReportEvidence {
+  id        String       @id @default(cuid())
+  reportId  String
+  authorId  String
+  kind      EvidenceKind
+  text      String?
+  fileUrl   String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  report DamageReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([reportId, createdAt])
+}
+
+model AdminDecision {
+  id                  String       @id @default(cuid())
+  reportId            String
+  adminId             String
+  decision            ReportStatus
+  approvedAmountCents Int?
+  publicNote          String?
+  /// Visible to admins only
+  internalNote        String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  report DamageReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  admin  User         @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([reportId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  adminId    String?
+  action     String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  admin User? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  itemId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

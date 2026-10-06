@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shareon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shareon}
+      POSTGRES_DB: shareon
+    ports: ["5432:5432"]
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shareon"]
+      interval: 5s
+      retries: 10
+
+  server:
+    build: { context: ., dockerfile: server/Dockerfile }
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://shareon:${POSTGRES_PASSWORD:-shareon}@db:5432/shareon?schema=public
+      # MUST be replaced with a long random secret (the server refuses "dev-only*" secrets in production)
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (min. 32 chars)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      PORT: 4000
+    volumes: [uploads:/app/server/uploads]
+    ports: ["4000:4000"]
+
+  client:
+    build: { context: ., dockerfile: client/Dockerfile }
+    depends_on: [server]
+    ports: ["8080:80"]
+
+volumes:
+  db-data:
+  uploads:
