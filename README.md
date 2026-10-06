@@ -124,7 +124,7 @@ client/
   src/components    design-system components (ItemCard, PriceBreakdown, ProtectionNotice, …)
 ```
 
-See also: [API.md](API.md) · [SECURITY_NOTES.md](SECURITY_NOTES.md) · [PRODUCT_LIMITATIONS.md](PRODUCT_LIMITATIONS.md) · [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+See also: [DEPLOYMENT.md](DEPLOYMENT.md) · [API.md](API.md) · [SECURITY_NOTES.md](SECURITY_NOTES.md) · [PRODUCT_LIMITATIONS.md](PRODUCT_LIMITATIONS.md) · [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
 ## ⚠️ Production warnings
 

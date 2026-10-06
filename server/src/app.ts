@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env.js';
@@ -22,7 +24,23 @@ export const createApp = () => {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: {
+        directives: {
+          'default-src': ["'self'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          'font-src': ["'self'", 'https://fonts.gstatic.com'],
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'connect-src': ["'self'"],
+          'object-src': ["'none'"],
+          'frame-ancestors': ["'none'"],
+        },
+      },
+    }),
+  );
 
   const allowed = env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
   app.use(
@@ -64,6 +82,20 @@ export const createApp = () => {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api', notFoundHandler);
+
+  // Optional: serve the built React app from the same origin (single-service hosting, no CORS needed).
+  if (env.CLIENT_DIST_DIR) {
+    const clientDir = path.resolve(process.cwd(), env.CLIENT_DIST_DIR);
+    const indexHtml = path.join(clientDir, 'index.html');
+    if (existsSync(indexHtml)) {
+      app.use(express.static(clientDir, { index: false, maxAge: '1h' }));
+      // SPA fallback for client-side routes (everything except /api and /uploads).
+      app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => res.sendFile(indexHtml));
+    } else {
+      console.warn(`[client] CLIENT_DIST_DIR set but ${indexHtml} not found – frontend not served`);
+    }
+  }
+
   app.use(errorHandler);
   return app;
 };

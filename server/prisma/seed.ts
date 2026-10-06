@@ -15,7 +15,9 @@ const d = (offset: number) => new Date(today().getTime() + offset * DAY);
 
 // DEVELOPMENT CREDENTIALS ONLY – change/remove before any production deployment.
 export const ADMIN_EMAIL = 'admin@shareon.local';
-export const ADMIN_PASSWORD = 'AdminShareOn2024';
+// In production the admin password MUST come from SEED_ADMIN_PASSWORD (never the public default).
+export const ADMIN_PASSWORD =
+  process.env.SEED_ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'AdminShareOn2024');
 export const USER_PASSWORD = 'Heslo12345';
 
 const users = [
@@ -60,6 +62,9 @@ const items: SeedItem[] = [
 const main = async () => {
   if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
     throw new Error('Refusing to seed in production. The seed DELETES all data. Set ALLOW_SEED=true only for a disposable demo database.');
+  }
+  if (ADMIN_PASSWORD.length < 12) {
+    throw new Error('SEED_ADMIN_PASSWORD must be set (min. 12 characters) when seeding in production.');
   }
   console.info('Seeding ShareOn…');
   await prisma.$transaction([
@@ -314,7 +319,11 @@ const main = async () => {
   }
 
   console.info(`Done: ${u.length + 1} users, ${it.length} items, ${rentals.length} rental requests.`);
-  console.info(`Admin: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD} (development only!)`);
+  console.info(
+    process.env.NODE_ENV === 'production'
+      ? `Admin: ${ADMIN_EMAIL} (password from SEED_ADMIN_PASSWORD)`
+      : `Admin: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD} (development only!)`,
+  );
   console.info(`Users: e.g. jana@example.sk / ${USER_PASSWORD}`);
 };
 

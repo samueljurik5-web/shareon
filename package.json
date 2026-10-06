@@ -2,7 +2,10 @@
   "name": "shareon",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["server", "client"],
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace server & npm run dev --workspace client",
     "build": "npm run build --workspace server && npm run build --workspace client",
@@ -11,6 +14,7 @@
     "test": "npm run test --workspace server && npm run test --workspace client",
     "db:migrate": "npm run db:migrate --workspace server",
     "db:deploy": "npm run db:deploy --workspace server",
-    "db:seed": "npm run db:seed --workspace server"
+    "db:seed": "npm run db:seed --workspace server",
+    "db:generate": "npm exec --workspace server -- prisma generate"
   }
 }

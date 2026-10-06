@@ -11,6 +11,8 @@ const schema = z.object({
   UPLOAD_DIR: z.string().default('uploads'),
   UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
   STORAGE_PROVIDER: z.enum(['local']).default('local'),
+  // Single-service deployment: absolute or cwd-relative path to the built client (client/dist).
+  CLIENT_DIST_DIR: z.string().optional(),
   RATE_LIMIT_ENABLED: z
     .string()
     .default('true')
