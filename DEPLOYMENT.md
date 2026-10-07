@@ -72,3 +72,18 @@ functions), and Vercel has no built-in Postgres (it offers Neon via its marketpl
 - Demo user passwords are public – anyone with the URL can log in as a demo user and change demo data.
 - Payments are simulated and protection is not insurance (see PRODUCT_LIMITATIONS.md). Do not invite the public
   before the legal/GDPR work in PRODUCT_LIMITATIONS.md is done.
+
+## Troubleshooting: "Render deployed, but the app looks old / hourly rentals are missing"
+
+1. **Check which commit is live:** open `https://<your-service>.onrender.com/api/health` → `{"ok":true,"version":"<short commit>"}`.
+   The same version is shown in the page footer (desktop) and at the bottom of the Profile page.
+2. **Hard-refresh the browser** (iPad Safari: close the tab, or Settings → Safari → Clear History and Website Data).
+   Since this fix, `index.html` is sent with `Cache-Control: no-cache` and hashed assets are `immutable`, so new deploys are
+   picked up on the next page load.
+3. **Data vs. code:** the database survives deploys. A database seeded before hourly rentals existed has only daily items
+   (the migration safely defaults existing items to daily-only). With `DEMO_SEED_ON_EMPTY=true`, the start step runs a
+   one-time **demo-data upgrade** (tracked in `AppSetting.demoDataVersion`) that enables hourly rental on the built-in
+   demo items owned by the demo accounts. Look for `[demo-data] upgraded to version 2` in the deploy log.
+   Real users' items are never changed – owners enable hourly rental in *Upraviť predmet → Spôsob prenájmu*.
+4. **Migrations:** the deploy log must show either `Applying migration …` or `No pending migrations to apply` with
+   `3 migrations found` (or more).

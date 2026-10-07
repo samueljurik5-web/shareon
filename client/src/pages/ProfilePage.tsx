@@ -62,6 +62,7 @@ export function ProfilePage() {
         {tab === 'reviews' && <MyReviews userId={user.id} />}
         {tab === 'settings' && <EditProfile onSaved={refresh} />}
       </div>
+      <p className="text-center text-xs text-ink-3">ShareOn · verzia {__APP_VERSION__}</p>
     </div>
   );
 }

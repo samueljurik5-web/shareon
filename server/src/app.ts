@@ -68,7 +68,12 @@ export const createApp = () => {
     }),
   );
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }));
+  // Deployed commit (Render sets RENDER_GIT_COMMIT) – lets you verify which version is live.
+  const version = (process.env.RENDER_GIT_COMMIT ?? process.env.APP_VERSION ?? 'dev').slice(0, 7);
+  app.get('/api/health', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, version });
+  });
   app.use('/api', apiLimiter);
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
@@ -90,9 +95,27 @@ export const createApp = () => {
     const clientDir = path.resolve(process.cwd(), env.CLIENT_DIST_DIR);
     const indexHtml = path.join(clientDir, 'index.html');
     if (existsSync(indexHtml)) {
-      app.use(express.static(clientDir, { index: false, maxAge: '1h' }));
+      app.use(
+        express.static(clientDir, {
+          index: false,
+          setHeaders: (res, filePath) => {
+            if (filePath.endsWith('.html')) {
+              // HTML must always be revalidated so a new deploy is picked up immediately.
+              res.setHeader('Cache-Control', 'no-cache');
+            } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+              // Vite assets have content hashes in their names → safe to cache forever.
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            } else {
+              res.setHeader('Cache-Control', 'public, max-age=3600');
+            }
+          },
+        }),
+      );
       // SPA fallback for client-side routes (everything except /api and /uploads).
-      app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => res.sendFile(indexHtml));
+      app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {
+        res.setHeader('Cache-Control', 'no-cache');
+        res.sendFile(indexHtml);
+      });
     } else {
       console.warn(`[client] CLIENT_DIST_DIR set but ${indexHtml} not found – frontend not served`);
     }

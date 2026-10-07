@@ -346,6 +346,8 @@ const main = async () => {
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     await prisma.appSetting.create({ data: { key, value } });
   }
+  // A fresh seed already contains the current demo data (see upgrades in seed-if-empty.ts).
+  await prisma.appSetting.create({ data: { key: 'demoDataVersion', value: 2 } });
 
   console.info(`Done: ${u.length + 1} users, ${it.length} items, ${rentals.length} rental requests.`);
   console.info(

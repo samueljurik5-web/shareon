@@ -76,6 +76,8 @@ export function Layout() {
         ShareOn MVP · Košice · Ochrana prenájmu nie je poistenie · Platby sú v MVP simulované
         <span className="mx-2">·</span>
         <Link to="/protection" className="underline hover:text-ink">Pravidlá a ochrana</Link>
+        <span className="mx-2">·</span>
+        <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
       </footer>
 
       <BottomNav />
