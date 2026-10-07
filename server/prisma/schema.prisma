@@ -43,6 +43,12 @@ enum RentalStatus {
   COMPLETED
 }
 
+/// PRENÁJOM NA DNI / PRENÁJOM NA HODINY
+enum RentalMode {
+  DAILY
+  HOURLY
+}
+
 enum HandoverMethod {
   PERSONAL_PICKUP
   OWNER_DELIVERY
@@ -93,6 +99,7 @@ enum DepositStatus {
 enum ReportType {
   ITEM_DAMAGED
   ITEM_NOT_RETURNED
+  LATE_RETURN
   ITEM_DIFFERENT_THAN_DESCRIPTION
   USER_BEHAVIOR
   PAYMENT_PROBLEM
@@ -157,7 +164,21 @@ model Item {
   title                  String
   category               Category
   description            String
-  pricePerDayCents       Int
+  /// Price per day in cents – required when dailyRentalEnabled (DB CHECK constraint)
+  dailyPriceCents        Int?
+  /// Price per hour in cents – required when hourlyRentalEnabled (DB CHECK constraint)
+  hourlyPriceCents       Int?
+  dailyRentalEnabled     Boolean       @default(true)
+  hourlyRentalEnabled    Boolean       @default(false)
+  minRentalHours         Int           @default(1)
+  maxRentalHours         Int           @default(12)
+  minRentalDays          Int           @default(1)
+  maxRentalDays          Int           @default(30)
+  /// Daily pick-up window for hourly rentals, local time Europe/Bratislava, "HH:MM"
+  availableFromTime      String        @default("08:00")
+  availableToTime        String        @default("20:00")
+  /// Gap required between two reservations of the same item
+  bufferHours            Int           @default(0)
   city                   String
   condition              ItemCondition
   availableFrom          DateTime      @db.Date
@@ -185,7 +206,8 @@ model Item {
   @@index([category, isActive])
   @@index([city])
   @@index([createdAt])
-  @@index([pricePerDayCents])
+  @@index([dailyPriceCents])
+  @@index([hourlyRentalEnabled, dailyRentalEnabled])
 }
 
 model ItemImage {
@@ -202,24 +224,39 @@ model ItemImage {
 }
 
 model RentalRequest {
-  id             String         @id @default(cuid())
-  itemId         String
-  renterId       String
-  ownerId        String
-  startDate      DateTime       @db.Date
-  endDate        DateTime       @db.Date
-  rentalDays     Int
-  message        String?
-  handoverMethod HandoverMethod
-  status         RentalStatus   @default(PENDING)
+  id              String         @id @default(cuid())
+  itemId          String
+  renterId        String
+  ownerId         String
+  rentalMode      RentalMode     @default(DAILY)
+  /// Calendar dates (Europe/Bratislava). Daily rule: start and end date are both included (12.–14. = 3 days).
+  /// Hourly rentals always have startDate == endDate.
+  startDate       DateTime       @db.Date
+  endDate         DateTime       @db.Date
+  /// Hourly only, local time "HH:MM"
+  startTime       String?
+  endTime         String?
+  /// Exact reserved interval in UTC (used for overlap + buffer checks)
+  startAt         DateTime
+  endAt           DateTime
+  /// Hourly: whole minutes; daily: null
+  durationMinutes Int?
+  /// Daily: number of days (inclusive); hourly: null
+  durationDays    Int?
+  message         String?
+  handoverMethod  HandoverMethod
+  status          RentalStatus   @default(PENDING)
 
   // Server-calculated price snapshot (cents)
-  pricePerDayCents   Int
+  /// Price per hour or per day depending on rentalMode
+  pricePerUnitCents  Int
   rentalPriceCents   Int
   protectionFeeCents Int
   depositCents       Int
   platformFeeCents   Int
   totalCents         Int
+  /// Amount returned to the renter if nothing is withheld (= deposit)
+  refundableCents    Int
   currency           String         @default("EUR")
   protectionMode     ProtectionMode
 
@@ -228,6 +265,8 @@ model RentalRequest {
 
   proposedStartDate DateTime? @db.Date
   proposedEndDate   DateTime? @db.Date
+  proposedStartTime String?
+  proposedEndTime   String?
   ownerNote         String?
 
   acceptedAt    DateTime?
@@ -255,7 +294,8 @@ model RentalRequest {
   @@index([itemId, status])
   @@index([renterId, status])
   @@index([ownerId, status])
-  @@index([startDate, endDate])
+  @@index([itemId, startAt, endAt])
+  @@index([rentalMode])
 }
 
 model Review {
@@ -316,7 +356,11 @@ model ProtectionQuote {
   isDemo                Boolean
   replacementValueCents Int
   protectedValueCents   Int
-  rentalDays            Int
+  rentalMode            RentalMode     @default(DAILY)
+  /// Daily quotes: inclusive day count; hourly: null
+  rentalDays            Int?
+  /// Hourly quotes: minutes; daily: null
+  durationMinutes       Int?
   feeCents              Int
   /// Raw calculation inputs (category, risk signals, multipliers) for transparency
   inputs                Json

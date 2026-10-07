@@ -23,7 +23,7 @@ export class NoProtectionProvider implements ProtectionProvider {
       unavailableReason: 'Ochrana prenájmu nie je aktívna.',
       feeCents: 0,
       protectedValueCents: 0,
-      breakdown: { rentalDays: input.rentalDays },
+      breakdown: { rentalMode: input.duration.mode },
       disclaimer: 'Pre tento prenájom nie je aktívna žiadna ochrana.',
     };
   }

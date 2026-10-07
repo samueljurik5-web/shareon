@@ -27,12 +27,31 @@ Legend: 🔓 public · 🔑 logged in · 👑 admin
 | GET | `/users/me/items` | 🔑 | Own items incl. inactive *(extra)* |
 | GET | `/users/me/favorites` | 🔑 | Favorite items *(extra)* |
 
+## Rental modes & pricing
+Items can be rented **na dni (DAILY)**, **na hodiny (HOURLY)** or both (`dailyRentalEnabled`, `hourlyRentalEnabled`).
+
+- **Daily rule:** start and end date are both included – `12.–14. 10.` = **3 days**. Same day = 1 day.
+- **Hourly rule:** one calendar day, `startTime < endTime` (no midnight crossing), 15-minute steps, within the item's
+  `availableFromTime`–`availableToTime`, between `minRentalHours`–`maxRentalHours`. Durations are stored in **minutes**.
+- Times are Europe/Bratislava wall-clock time; each rental also stores its exact UTC interval (`startAt`, `endAt`).
+- Overlaps are checked against reserved rentals (ACCEPTED…DISPUTED) **including `bufferHours`** on both sides.
+- Prices (all server-side): hourly `rentalPrice = minutes × pricePerHour / 60`, daily `rentalPrice = days × pricePerDay`;
+  `total = rentalPrice + protectionFee + deposit + platformFee`; `refundable = deposit`.
+- Demo protection fee: daily `max(1.50 €, value × 2 %) × (1 + max(0, days − 3) × 0.05)`;
+  hourly `max(1.50 €, value × 2 % × min(1, hours / 24))` – internal demo calculation, **not insurance**.
+
+| Method | Path | | |
+|---|---|---|---|
+| POST | `/pricing/quote` | 🔓 | `{ itemId, rentalMode: DAILY\|HOURLY, startDate, endDate? (daily), startTime?, endTime? (hourly, HH:MM) }` → `{ quote: { available, period: { …, label }, price } }`. Validates mode, past dates, availability window, hours/min/max, overlaps + buffer. **Read-only – never creates a rental request.** 400/409 with a Slovak message when not available. |
+
+`price` = `{ rentalMode, durationMinutes, durationDays, units, unit, pricePerUnitCents, rentalPriceCents, protectionFeeCents, depositCents, platformFeeCents, totalCents, refundableCents, protection, … }`
+
 ## Items
 | Method | Path | | |
 |---|---|---|---|
-| GET | `/items` | 🔓 | Query: `q, category, city, minPrice, maxPrice, condition (comma list), from, to (YYYY-MM-DD), protection=true, favorites=true, ownerId, sort=newest\|price_asc\|price_desc\|rating, page, limit` |
+| GET | `/items` | 🔓 | Query: `q, category, city, mode=DAILY\|HOURLY, minPrice, maxPrice, condition (comma list), from, to (YYYY-MM-DD), protection=true, favorites=true, ownerId, sort=newest\|price_asc\|price_desc\|rating, page, limit` |
 | GET | `/items/:id` | 🔓 | Detail incl. owner rating, item rating, blocked ranges, 3-day estimate |
-| POST | `/items` | 🔑 | `{ title, category, description, pricePerDay, city, condition, availableFrom, availableTo, replacementValue, serialNote?, protectionEligible, images[1..5], declarations: { rightToOffer, accurateDescription, damageDisclosed, photosCurrent } (all true) }` |
+| POST | `/items` | 🔑 | `{ title, category, description, city, condition, availableFrom, availableTo, replacementValue, serialNote?, protectionEligible, images[1..5], dailyRentalEnabled, hourlyRentalEnabled, dailyPrice?, hourlyPrice?, minRentalHours, maxRentalHours, minRentalDays, maxRentalDays, availableFromTime, availableToTime, bufferHours, declarations: {…} (all true) }` – price required for each enabled mode, at least one mode |
 | PATCH | `/items/:id` | 🔑 owner | Partial of the above (+ `isActive`); cannot re-activate admin-deactivated items |
 | DELETE | `/items/:id` | 🔑 owner | Hard delete without history, otherwise soft delete; 409 if open rentals |
 | POST/DELETE | `/items/:id/favorite` | 🔑 | |
@@ -48,7 +67,7 @@ Categories: `GARDEN, SPORT, WORKSHOP, LEISURE, OTHER` · Conditions: `NEW, VERY_
 ## Rental requests
 | Method | Path | | |
 |---|---|---|---|
-| POST | `/rental-requests` | 🔑 | `{ itemId, startDate, endDate, message?, handoverMethod: PERSONAL_PICKUP\|OWNER_DELIVERY\|MEET_ELSEWHERE, acceptRules: true, acceptProtectionDisclaimer }` – prices computed server-side; extra fields ignored |
+| POST | `/rental-requests` | 🔑 | `{ itemId, rentalMode, startDate, endDate? \| startTime+endTime, message?, handoverMethod: PERSONAL_PICKUP\|OWNER_DELIVERY\|MEET_ELSEWHERE, acceptRules: true, acceptProtectionDisclaimer }` – availability and all amounts recalculated server-side; client prices/durations ignored |
 | GET | `/rental-requests/sent` | 🔑 | As renter |
 | GET | `/rental-requests/received` | 🔑 | As owner |
 | GET | `/rental-requests/:id` | 🔑 party/👑 | Full detail, price snapshot, protection, deposit, handover records, `availableActions`, contact details only from ACCEPTED on |
@@ -62,7 +81,7 @@ Status actions:
 |---|---|---|---|
 | `ACCEPT` | owner | PENDING | ACCEPTED (+ protection record, simulated deposit HELD) |
 | `REJECT` | owner | PENDING | REJECTED |
-| `PROPOSE_DATES` `{startDate,endDate,note?}` | owner | PENDING | PENDING (proposal stored) |
+| `PROPOSE_DATES` `{startDate, endDate (daily) \| startTime+endTime (hourly), note?}` | owner | PENDING | PENDING (proposal stored) |
 | `ACCEPT_PROPOSAL` | renter | PENDING + proposal | ACCEPTED (re-priced) |
 | `DECLINE_PROPOSAL` | renter | PENDING + proposal | PENDING |
 | `CANCEL` | renter (PENDING) / either (ACCEPTED) | | CANCELLED (protection cancelled, deposit released) |
@@ -102,7 +121,7 @@ Deposit transitions: `PENDING→HELD|RELEASED`, `HELD→RELEASE_REQUESTED|RELEAS
 | POST | `/reports/:id/evidence` | 🔑 participant | `{ text?, fileUrl? }` (NEEDS_MORE_INFORMATION → UNDER_REVIEW) |
 | POST | `/reports/:id/response` | 🔑 reported party | `{ text?, fileUrl? }` |
 
-Types: `ITEM_DAMAGED, ITEM_NOT_RETURNED, ITEM_DIFFERENT_THAN_DESCRIPTION, USER_BEHAVIOR, PAYMENT_PROBLEM, OTHER`
+Types: `ITEM_DAMAGED, ITEM_NOT_RETURNED, LATE_RETURN, ITEM_DIFFERENT_THAN_DESCRIPTION, USER_BEHAVIOR, PAYMENT_PROBLEM, OTHER`
 
 ## Admin 👑
 | Method | Path | |

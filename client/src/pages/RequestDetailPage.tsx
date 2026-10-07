@@ -14,9 +14,10 @@ import { RatingInput } from '../components/Rating';
 import { Avatar } from '../components/Avatar';
 import { SelectField, TextArea, TextField } from '../components/Field';
 import {
-  DAMAGE_DISCLAIMER, DEPOSIT_STATUS_LABELS, formatDate, formatDateTime, formatEur, HANDOVER_LABELS, imageUrl,
-  RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS,
+  DAILY_RULE_TEXT, DAMAGE_DISCLAIMER, DEPOSIT_STATUS_LABELS, formatDateTime, formatDayLong, formatDuration, formatEur, formatPeriod, HANDOVER_LABELS, imageUrl,
+  RENTAL_MODE_TITLES, RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS,
 } from '../lib/format';
+import type { RentalMode } from '../api/types';
 
 const STEPS: { key: RentalStatus[]; label: string }[] = [
   { key: ['PENDING'], label: 'Žiadosť' },
@@ -62,14 +63,16 @@ export function RequestDetailPage() {
   const myReturn = r.handoverRecords.find((h) => h.type === 'RETURN' && h.partyRole === r.viewerRole);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 [&>*]:min-w-0 lg:grid-cols-[1.4fr_1fr]">
       <div className="space-y-5">
         <Link to={`/items/${r.item.id}`} className="card flex items-center gap-4 p-4 hover:border-neon-purple/40">
           <img src={imageUrl(r.item.images[0]?.url)} alt="" className="h-20 w-20 rounded-2xl object-cover" />
           <div className="min-w-0">
             <span className={`badge ${RENTAL_STATUS_BADGE[r.status]}`}>{RENTAL_STATUS_LABELS[r.status]}</span>
             <h1 className="mt-1 truncate text-xl font-extrabold">{r.item.title}</h1>
-            <p className="text-sm text-ink-2">{formatDate(r.startDate)} – {formatDate(r.endDate)} · {r.rentalDays} d · {HANDOVER_LABELS[r.handoverMethod]}</p>
+            <p className="mt-1 text-xs font-bold tracking-wide text-neon-blue">{RENTAL_MODE_TITLES[r.rentalMode]}</p>
+            <p className="text-sm font-semibold text-ink">{formatPeriod(r)}</p>
+            <p className="text-sm text-ink-2">{formatDuration(r)} · {HANDOVER_LABELS[r.handoverMethod]}</p>
           </div>
         </Link>
 
@@ -86,9 +89,30 @@ export function RequestDetailPage() {
           </ol>
         )}
 
+        <div className="card grid gap-3 p-4 text-sm sm:grid-cols-2">
+          <div>
+            <div className="text-xs text-ink-3">{r.rentalMode === 'HOURLY' ? 'Odovzdanie' : 'Začiatok prenájmu'}</div>
+            <div className="font-semibold">{formatDayLong(r.startDate)}{r.startTime && `, ${r.startTime}`}</div>
+          </div>
+          <div>
+            <div className="text-xs text-ink-3">{r.rentalMode === 'HOURLY' ? 'Vrátenie najneskôr' : 'Koniec prenájmu (vrátane)'}</div>
+            <div className="font-semibold">{formatDayLong(r.endDate)}{r.endTime && `, ${r.endTime}`}</div>
+          </div>
+          {r.rentalMode === 'DAILY' && <p className="text-xs text-ink-3 sm:col-span-2">{DAILY_RULE_TEXT}</p>}
+          <p className="text-xs text-ink-3 sm:col-span-2">Časy sú v časovom pásme Bratislava.</p>
+        </div>
+
+        {r.isOverdue && (
+          <div className="notice notice-warn" role="alert">
+            <div className="flex items-center gap-2 font-semibold text-ink"><AlertTriangle className="h-4 w-4 text-danger" aria-hidden />Dohodnutý čas vrátenia uplynul</div>
+            <p className="mt-1">Potvrďte vrátenie. Ak predmet nebol vrátený včas, môžete nahlásiť oneskorené vrátenie.</p>
+            {can('REPORT') && <button className="btn btn-danger btn-sm mt-3" onClick={() => setReportOpen(true)}>Nahlásiť oneskorené vrátenie</button>}
+          </div>
+        )}
+
         {r.proposedStartDate && (
           <div className="notice notice-warn">
-            <div className="flex items-center gap-2 font-semibold text-ink"><CalendarClock className="h-4 w-4" aria-hidden />Majiteľ navrhol iný termín: {formatDate(r.proposedStartDate)} – {formatDate(r.proposedEndDate!)}</div>
+            <div className="flex items-center gap-2 font-semibold text-ink"><CalendarClock className="h-4 w-4" aria-hidden />Majiteľ navrhol iný termín: {formatPeriod({ rentalMode: r.rentalMode, startDate: r.proposedStartDate, endDate: r.proposedEndDate!, startTime: r.proposedStartTime, endTime: r.proposedEndTime })}</div>
             {r.ownerNote && <p className="mt-1">„{r.ownerNote}“</p>}
             {can('ACCEPT_PROPOSAL') && (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -118,7 +142,7 @@ export function RequestDetailPage() {
             {can('CANCEL') && <button className="btn btn-ghost" disabled={busy} onClick={() => act('CANCEL', { title: 'Zrušiť prenájom?', danger: true, confirmLabel: 'Zrušiť prenájom' })}>Zrušiť</button>}
           </div>
         )}
-        {proposeOpen && <ProposeDates rentalId={r.id} onDone={() => { setProposeOpen(false); reload(); }} />}
+        {proposeOpen && <ProposeDates rentalId={r.id} mode={r.rentalMode} onDone={() => { setProposeOpen(false); reload(); }} />}
 
         {can('HANDOVER') && !myHandover && (
           <Checklist
@@ -147,7 +171,13 @@ export function RequestDetailPage() {
       <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
         <div className="card space-y-4 p-5">
           <h2 className="font-bold">Cena</h2>
-          <PriceBreakdown rentalDays={r.rentalDays} {...r.price} isDemo={r.protection?.isDemo ?? true} simulated={r.deposit?.isSimulated ?? true} />
+          <PriceBreakdown
+            rentalMode={r.rentalMode}
+            units={r.rentalMode === 'HOURLY' ? (r.durationMinutes ?? 0) / 60 : (r.durationDays ?? 0)}
+            {...r.price}
+            isDemo={r.protection?.isDemo ?? true}
+            simulated={r.deposit?.isSimulated ?? true}
+          />
         </div>
         {r.protection && (
           <div className="card space-y-3 p-5">
@@ -159,7 +189,7 @@ export function RequestDetailPage() {
         {!r.protection && r.price.protectionFeeCents > 0 && <ProtectionNotice compact />}
         {r.deposit && (
           <div className="card space-y-2 p-5">
-            <h2 className="flex items-center gap-2 font-bold"><Wallet className="h-5 w-5 text-neon-blue" aria-hidden />Záloha</h2>
+            <h2 className="flex items-center gap-2 font-bold"><Wallet className="h-5 w-5 text-neon-blue" aria-hidden />Vratná kaucia</h2>
             {r.deposit.label && <span className="badge badge-demo">{r.deposit.label}</span>}
             <p className="text-sm text-ink-2">{formatEur(r.deposit.amountCents)} · {DEPOSIT_STATUS_LABELS[r.deposit.status]}{r.deposit.withheldCents > 0 && ` · zadržané ${formatEur(r.deposit.withheldCents)}`}</p>
             <p className="text-xs text-ink-3">V MVP sa žiadne peniaze neblokujú ani neprevádzajú.</p>
@@ -181,7 +211,7 @@ export function RequestDetailPage() {
           {can('REPORT') && <button className="btn btn-danger btn-sm w-full" onClick={() => setReportOpen(true)}><AlertTriangle className="h-4 w-4" aria-hidden />Nahlásiť problém</button>}
         </div>
       </aside>
-      {reportOpen && <ReportModal rentalId={r.id} maxCents={r.item.replacementValueCents} onClose={() => setReportOpen(false)} />}
+      {reportOpen && <ReportModal rentalId={r.id} maxCents={r.item.replacementValueCents} defaultType={r.isOverdue ? 'LATE_RETURN' : 'ITEM_DAMAGED'} onClose={() => setReportOpen(false)} />}
     </div>
   );
 }
@@ -267,17 +297,26 @@ function Checklist({ title, description, endpoint, askItemOk, onDone }: { title:
   );
 }
 
-function ProposeDates({ rentalId, onDone }: { rentalId: string; onDone: () => void }) {
+function ProposeDates({ rentalId, mode, onDone }: { rentalId: string; mode: RentalMode; onDone: () => void }) {
   const { toast } = useUi();
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const hourly = mode === 'HOURLY';
+  const ready = hourly ? start && startTime && endTime : start && end;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await patch(`/api/rental-requests/${rentalId}/status`, { action: 'PROPOSE_DATES', startDate: start, endDate: end, note: note || undefined });
+      await patch(`/api/rental-requests/${rentalId}/status`, {
+        action: 'PROPOSE_DATES',
+        startDate: start,
+        ...(hourly ? { startTime, endTime } : { endDate: end }),
+        note: note || undefined,
+      });
       toast('Návrh termínu bol odoslaný.');
       onDone();
     } catch (err) {
@@ -288,18 +327,28 @@ function ProposeDates({ rentalId, onDone }: { rentalId: string; onDone: () => vo
   };
   return (
     <form onSubmit={submit} className="card grid gap-3 p-5 sm:grid-cols-2">
-      <TextField id="p-start" type="date" label="Nový začiatok" value={start} onChange={(e) => setStart(e.target.value)} required />
-      <TextField id="p-end" type="date" label="Nový koniec" value={end} onChange={(e) => setEnd(e.target.value)} required />
+      {hourly ? (
+        <>
+          <div className="sm:col-span-2"><TextField id="p-start" type="date" label="Dátum" value={start} onChange={(e) => setStart(e.target.value)} required /></div>
+          <TextField id="p-from" type="time" step={900} label="Začiatok" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+          <TextField id="p-to" type="time" step={900} label="Koniec" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+        </>
+      ) : (
+        <>
+          <TextField id="p-start" type="date" label="Nový začiatok" value={start} onChange={(e) => setStart(e.target.value)} required />
+          <TextField id="p-end" type="date" label="Nový koniec" value={end} onChange={(e) => setEnd(e.target.value)} required />
+        </>
+      )}
       <div className="sm:col-span-2"><TextField id="p-note" label="Poznámka" value={note} onChange={(e) => setNote(e.target.value)} /></div>
-      <button className="btn btn-primary sm:col-span-2" disabled={busy || !start || !end}>Odoslať návrh</button>
+      <button className="btn btn-primary sm:col-span-2" disabled={busy || !ready}>Odoslať návrh</button>
     </form>
   );
 }
 
-function ReportModal({ rentalId, maxCents, onClose }: { rentalId: string; maxCents: number; onClose: () => void }) {
+function ReportModal({ rentalId, maxCents, defaultType, onClose }: { rentalId: string; maxCents: number; defaultType: string; onClose: () => void }) {
   const navigate = useNavigate();
   const { toast } = useUi();
-  const [type, setType] = useState('ITEM_DAMAGED');
+  const [type, setType] = useState(defaultType);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);

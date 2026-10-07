@@ -1,7 +1,9 @@
  
 import { PrismaClient, type Category, type ItemCondition, type RentalStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { calculatePriceForDays } from '../src/services/pricing.js';
+import { calculateRentalPrice } from '../src/services/pricing.js';
+import { resolvePeriod } from '../src/services/availability.js';
+import { addDaysToDate, todayLocal } from '../src/lib/time.js';
 import { DEFAULT_SETTINGS } from '../src/services/settings.js';
 
 const prisma = new PrismaClient();
@@ -35,7 +37,10 @@ type SeedItem = {
   title: string;
   category: Category;
   description: string;
-  price: number;
+  price: number | null;
+  /** € per hour – enables hourly rental */
+  hourly?: number;
+  bufferHours?: number;
   value: number;
   condition: ItemCondition;
   image: string;
@@ -43,18 +48,18 @@ type SeedItem = {
 
 const items: SeedItem[] = [
   { owner: 0, title: 'Benzínová kosačka na trávu', category: 'GARDEN', description: 'Spoľahlivá benzínová kosačka so záberom 46 cm a košom na trávu. Vhodná pre záhradu do 800 m².', price: 12, value: 280, condition: 'VERY_GOOD', image: '/placeholders/garden.svg' },
-  { owner: 0, title: 'Plotostrih aku 18V', category: 'GARDEN', description: 'Akumulátorový plotostrih s dĺžkou lišty 55 cm, batéria a nabíjačka v cene.', price: 7, value: 120, condition: 'GOOD', image: '/placeholders/garden-2.svg' },
-  { owner: 6, title: 'Vertikutátor elektrický', category: 'GARDEN', description: 'Elektrický vertikutátor na prevzdušnenie trávnika, záber 32 cm, kôš 30 l.', price: 9, value: 150, condition: 'GOOD', image: '/placeholders/garden.svg' },
+  { owner: 0, title: 'Plotostrih aku 18V', category: 'GARDEN', description: 'Akumulátorový plotostrih s dĺžkou lišty 55 cm, batéria a nabíjačka v cene.', price: 7, hourly: 2, value: 120, condition: 'GOOD', image: '/placeholders/garden-2.svg' },
+  { owner: 6, title: 'Vertikutátor elektrický', category: 'GARDEN', description: 'Elektrický vertikutátor na prevzdušnenie trávnika, záber 32 cm, kôš 30 l.', price: null, hourly: 3, value: 150, condition: 'GOOD', image: '/placeholders/garden.svg' },
   { owner: 6, title: 'Záhradný drvič konárov', category: 'GARDEN', description: 'Drvič konárov do priemeru 40 mm. Ideálny na jarné strihanie stromov.', price: 15, value: 350, condition: 'USED', image: '/placeholders/garden-2.svg' },
-  { owner: 1, title: 'Príklepová vŕtačka Bosch-like 750W', category: 'WORKSHOP', description: 'Výkonná príklepová vŕtačka 750 W, sada vrtákov do betónu a dreva v kufri.', price: 6, value: 110, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
+  { owner: 1, title: 'Príklepová vŕtačka Bosch-like 750W', category: 'WORKSHOP', description: 'Výkonná príklepová vŕtačka 750 W, sada vrtákov do betónu a dreva v kufri.', price: 8, hourly: 3, bufferHours: 1, value: 100, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
   { owner: 1, title: 'Kotúčová píla 1400W', category: 'WORKSHOP', description: 'Ručná kotúčová píla s vodiacou lištou, hĺbka rezu 65 mm. Kotúč na drevo vymenený.', price: 10, value: 190, condition: 'GOOD', image: '/placeholders/workshop-2.svg' },
-  { owner: 1, title: 'Tlakový čistič 140 bar', category: 'WORKSHOP', description: 'Vysokotlakový čistič na terasy, autá a fasády. Hadica 8 m, rotačná tryska.', price: 11, value: 220, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
+  { owner: 1, title: 'Tlakový čistič 140 bar', category: 'WORKSHOP', description: 'Vysokotlakový čistič na terasy, autá a fasády. Hadica 8 m, rotačná tryska.', price: 11, hourly: 4, bufferHours: 1, value: 220, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
   { owner: 1, title: 'Hliníkový rebrík 3×9', category: 'WORKSHOP', description: 'Trojdielny kombinovaný rebrík, max. pracovná výška 6,5 m. Drobné škrabance.', price: 8, value: 160, condition: 'WORN', image: '/placeholders/workshop-2.svg' },
   { owner: 2, title: 'Paddleboard nafukovací 320 cm', category: 'SPORT', description: 'Nafukovací paddleboard s pádlom, pumpou a batohom. Nosnosť 120 kg.', price: 14, value: 400, condition: 'VERY_GOOD', image: '/placeholders/sport.svg' },
   { owner: 2, title: 'Horský bicykel 29" veľkosť L', category: 'SPORT', description: 'Hardtail MTB, hydraulické brzdy, 1×12 prevodovka. Prilba na požiadanie.', price: 16, value: 650, condition: 'GOOD', image: '/placeholders/sport-2.svg' },
   { owner: 3, title: 'Bežky s viazaním, veľ. 190 cm', category: 'SPORT', description: 'Klasické bežecké lyže s viazaním NNN, palice v cene. Topánky veľkosť 43.', price: 8, value: 180, condition: 'USED', image: '/placeholders/sport.svg' },
   { owner: 3, title: 'Stan pre 4 osoby', category: 'LEISURE', description: 'Rodinný stan s predsieňou, vodný stĺpec 3000 mm. Vhodný na kempovanie.', price: 9, value: 210, condition: 'VERY_GOOD', image: '/placeholders/leisure.svg' },
-  { owner: 4, title: 'Prenosný projektor + plátno', category: 'LEISURE', description: 'Full HD projektor s plátnom 100", ideálny na letné kino na záhrade.', price: 13, value: 300, condition: 'GOOD', image: '/placeholders/leisure-2.svg' },
+  { owner: 4, title: 'Prenosný projektor + plátno', category: 'LEISURE', description: 'Full HD projektor s plátnom 100", ideálny na letné kino na záhrade.', price: 13, hourly: 5, value: 300, condition: 'GOOD', image: '/placeholders/leisure-2.svg' },
   { owner: 4, title: 'Detský bicyklový vozík', category: 'LEISURE', description: 'Vozík za bicykel pre 2 deti, s pláštenkou a vlajočkou. Dá sa použiť aj ako kočík.', price: 10, value: 250, condition: 'GOOD', image: '/placeholders/leisure.svg' },
   { owner: 5, title: 'Plynový gril s 3 horákmi', category: 'OTHER', description: 'Plynový gril s tromi horákmi a bočnou platňou, bez plynovej fľaše.', price: 12, value: 330, condition: 'NEW', image: '/placeholders/other.svg' },
 ];
@@ -95,7 +100,7 @@ const main = async () => {
   const u = [] as { id: string }[];
   for (const x of users) u.push(await prisma.user.create({ data: { ...x, city: 'Košice', passwordHash: userHash } }));
 
-  const it = [] as { id: string; ownerId: string; pricePerDayCents: number; replacementValueCents: number; category: Category; protectionEligible: boolean }[];
+  const it = [] as Awaited<ReturnType<typeof prisma.item.create>>[];
   for (const [idx, x] of items.entries()) {
     const created = await prisma.item.create({
       data: {
@@ -103,7 +108,15 @@ const main = async () => {
         title: x.title,
         category: x.category,
         description: x.description,
-        pricePerDayCents: x.price * 100,
+        dailyRentalEnabled: x.price != null,
+        dailyPriceCents: x.price != null ? x.price * 100 : null,
+        hourlyRentalEnabled: x.hourly != null,
+        hourlyPriceCents: x.hourly != null ? x.hourly * 100 : null,
+        minRentalHours: 1,
+        maxRentalHours: 10,
+        availableFromTime: '08:00',
+        availableToTime: '20:00',
+        bufferHours: x.bufferHours ?? 0,
         replacementValueCents: x.value * 100,
         city: 'Košice',
         condition: x.condition,
@@ -118,7 +131,8 @@ const main = async () => {
     it.push(created);
   }
 
-  const rentalSpecs: { item: number; renter: number; start: number; end: number; status: RentalStatus; msg: string }[] = [
+  // Days are inclusive (start and end date both count). Hourly specs use a single day + times.
+  const rentalSpecs: { item: number; renter: number; start: number; end: number; status: RentalStatus; msg: string; times?: [string, string] }[] = [
     { item: 0, renter: 1, start: -40, end: -37, status: 'COMPLETED', msg: 'Dobrý deň, potreboval by som pokosiť záhradu na chate.' },
     { item: 4, renter: 0, start: -30, end: -28, status: 'COMPLETED', msg: 'Ahoj, potrebujem zavesiť poličky.' },
     { item: 8, renter: 3, start: -20, end: -17, status: 'COMPLETED', msg: 'Chceli by sme ísť na Ružín.' },
@@ -129,13 +143,19 @@ const main = async () => {
     { item: 1, renter: 4, start: 6, end: 8, status: 'PENDING', msg: 'Dobrý deň, mohla by som si požičať plotostrih?' },
     { item: 6, renter: 3, start: 10, end: 11, status: 'PENDING', msg: 'Potrebujem umyť terasu pred grilovačkou.' },
     { item: 14, renter: 0, start: 12, end: 13, status: 'REJECTED', msg: 'Oslava narodenín v sobotu.' },
+    { item: 4, renter: 5, start: 4, end: 4, times: ['14:00', '18:00'], status: 'ACCEPTED', msg: 'Potrebujem na pár hodín vŕtačku – montáž kuchynky.' },
   ];
+  const local = (offset: number) => addDaysToDate(todayLocal(), offset);
 
   const rentals = [] as { id: string; ownerId: string; renterId: string; itemId: string; status: RentalStatus }[];
   for (const spec of rentalSpecs) {
     const item = it[spec.item];
-    const days = Math.max(1, spec.end - spec.start);
-    const price = await calculatePriceForDays(item, days, DEFAULT_SETTINGS);
+    const period = resolvePeriod(
+      spec.times
+        ? { rentalMode: 'HOURLY', startDate: local(spec.start), startTime: spec.times[0], endTime: spec.times[1] }
+        : { rentalMode: 'DAILY', startDate: local(spec.start), endDate: local(spec.end) },
+    );
+    const price = await calculateRentalPrice(item, period.duration, DEFAULT_SETTINGS);
     const accepted = !['PENDING', 'REJECTED'].includes(spec.status);
     const done = spec.status === 'COMPLETED';
     const rental = await prisma.rentalRequest.create({
@@ -143,13 +163,20 @@ const main = async () => {
         itemId: item.id,
         renterId: u[spec.renter].id,
         ownerId: item.ownerId,
-        startDate: d(spec.start),
-        endDate: d(spec.end),
-        rentalDays: price.rentalDays,
+        rentalMode: period.mode,
+        startDate: new Date(`${period.startDate}T00:00:00Z`),
+        endDate: new Date(`${period.endDate}T00:00:00Z`),
+        startTime: period.startTime,
+        endTime: period.endTime,
+        startAt: period.startAt,
+        endAt: period.endAt,
+        durationMinutes: price.durationMinutes,
+        durationDays: price.durationDays,
         message: spec.msg,
         handoverMethod: 'PERSONAL_PICKUP',
         status: spec.status,
-        pricePerDayCents: price.pricePerDayCents,
+        pricePerUnitCents: price.pricePerUnitCents,
+        refundableCents: price.refundableCents,
         rentalPriceCents: price.rentalPriceCents,
         protectionFeeCents: price.protectionFeeCents,
         depositCents: price.depositCents,
@@ -180,7 +207,9 @@ const main = async () => {
           isDemo: true,
           replacementValueCents: item.replacementValueCents,
           protectedValueCents: price.protection.protectedValueCents,
-          rentalDays: price.rentalDays,
+          rentalMode: price.rentalMode,
+          rentalDays: price.durationDays,
+          durationMinutes: price.durationMinutes,
           feeCents: price.protection.feeCents,
           inputs: price.protection.breakdown,
           expiresAt: d(spec.start + 4),

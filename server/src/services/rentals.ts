@@ -1,17 +1,17 @@
-import type { HandoverMethod, Prisma, RentalRequest, RentalStatus, User } from '@prisma/client';
+import type { HandoverMethod, Item, Prisma, RentalMode, RentalRequest, RentalStatus, User } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
-import { parseDateOnly, todayUtc, toDateOnlyString } from '../lib/dates.js';
 import { getSettings } from './settings.js';
-import { calculatePrice, loadRiskSignals } from './pricing.js';
+import { calculateRentalPrice, loadRiskSignals } from './pricing.js';
+import type { PriceBreakdown } from './pricing.js';
 import { getProtectionProvider } from './protection/index.js';
 import { createDepositForRental, tryTransitionDeposit } from './deposit/index.js';
 import { notify } from './notifications.js';
-import { BLOCKING_RENTAL_STATUSES } from './items.js';
+import { checkItemAvailability, resolvePeriod } from './availability.js';
+import type { ResolvedPeriod } from './availability.js';
+import { describePeriod } from './periodText.js';
 
 type Tx = Prisma.TransactionClient;
-
-export const MAX_RENTAL_DAYS = 30;
 
 /** Statuses in which contact details (phone, e-mail) are shared between the parties. */
 export const CONTACT_VISIBLE_STATUSES: RentalStatus[] = [
@@ -34,39 +34,90 @@ export const loadRentalForParty = async (id: string, user: User) => {
   return { rental, role };
 };
 
-/** Validates dates against item availability and overlapping rentals. */
-export const validateRentalDates = async (
-  item: { id: string; availableFrom: Date; availableTo: Date },
-  start: Date,
-  end: Date,
-  excludeRentalId?: string,
-  tx: Tx = prisma,
+/** Period stored on a rental → ResolvedPeriod (for re-validation on acceptance). */
+export const periodOfRental = (r: Pick<RentalRequest, 'rentalMode' | 'startDate' | 'endDate' | 'startTime' | 'endTime'>) =>
+  resolvePeriod({
+    rentalMode: r.rentalMode,
+    startDate: r.startDate.toISOString().slice(0, 10),
+    endDate: r.endDate.toISOString().slice(0, 10),
+    startTime: r.startTime,
+    endTime: r.endTime,
+  });
+
+/** DB fields describing the period + server-calculated price snapshot. */
+const periodAndPriceData = (period: ResolvedPeriod, price: PriceBreakdown, withProtection: boolean) => {
+  const protectionFeeCents = withProtection ? price.protectionFeeCents : 0;
+  return {
+    rentalMode: period.mode,
+    startDate: new Date(`${period.startDate}T00:00:00Z`),
+    endDate: new Date(`${period.endDate}T00:00:00Z`),
+    startTime: period.startTime,
+    endTime: period.endTime,
+    startAt: period.startAt,
+    endAt: period.endAt,
+    durationMinutes: price.durationMinutes,
+    durationDays: price.durationDays,
+    pricePerUnitCents: price.pricePerUnitCents,
+    rentalPriceCents: price.rentalPriceCents,
+    protectionFeeCents,
+    depositCents: price.depositCents,
+    platformFeeCents: price.platformFeeCents,
+    totalCents: price.totalCents - (price.protectionFeeCents - protectionFeeCents),
+    refundableCents: price.refundableCents,
+  };
+};
+
+/** Persists the protection quote used for a request/estimate (audit trail of the fee). */
+export const saveProtectionQuote = (
+  tx: Tx,
+  data: { itemId: string; rentalRequestId?: string | null; userId?: string | null; replacementValueCents: number; price: PriceBreakdown; ttlMs?: number },
 ) => {
-  if (end < start) throw badRequest('Dátum vrátenia musí byť po dátume začiatku.');
-  if (start < todayUtc()) throw badRequest('Začiatok prenájmu nemôže byť v minulosti.');
-  const days = Math.round((end.getTime() - start.getTime()) / 86400000);
-  if (days > MAX_RENTAL_DAYS) throw badRequest(`Prenájom môže trvať najviac ${MAX_RENTAL_DAYS} dní.`);
-  if (start < item.availableFrom || end > item.availableTo) {
-    throw badRequest(
-      `Predmet je dostupný len od ${toDateOnlyString(item.availableFrom)} do ${toDateOnlyString(item.availableTo)}.`,
-    );
-  }
-  const overlap = await tx.rentalRequest.count({
-    where: {
-      itemId: item.id,
-      id: excludeRentalId ? { not: excludeRentalId } : undefined,
-      status: { in: [...BLOCKING_RENTAL_STATUSES] },
-      startDate: { lte: end },
-      endDate: { gte: start },
+  const q = data.price.protection;
+  if (!q?.available) return null;
+  return tx.protectionQuote.create({
+    data: {
+      itemId: data.itemId,
+      rentalRequestId: data.rentalRequestId ?? null,
+      userId: data.userId ?? null,
+      provider: q.provider,
+      mode: q.mode,
+      isDemo: q.isDemo,
+      replacementValueCents: data.replacementValueCents,
+      protectedValueCents: q.protectedValueCents,
+      rentalMode: data.price.rentalMode,
+      rentalDays: data.price.durationDays,
+      durationMinutes: data.price.durationMinutes,
+      feeCents: q.feeCents,
+      inputs: q.breakdown,
+      expiresAt: new Date(Date.now() + (data.ttlMs ?? 7 * 86400000)),
     },
   });
-  if (overlap > 0) throw conflict('Predmet je v tomto termíne už požičaný.');
+};
+
+/**
+ * Validates a requested period for an item and returns the full server-side quote.
+ * Used by POST /api/pricing/quote (no side effects) and by rental creation.
+ */
+export const quoteRental = async (
+  item: Item & { owner?: { isActive: boolean } | null },
+  input: { rentalMode: RentalMode; startDate: string; endDate?: string | null; startTime?: string | null; endTime?: string | null },
+  renterId: string | null,
+  opts: { excludeRentalId?: string; tx?: Tx } = {},
+) => {
+  const period = resolvePeriod(input);
+  await checkItemAvailability(item, period, { ...opts, ownerActive: item.owner?.isActive });
+  const settings = await getSettings();
+  const price = await calculateRentalPrice(item, period.duration, settings, await loadRiskSignals(renterId, item.ownerId));
+  return { period, price };
 };
 
 export interface CreateRentalInput {
   itemId: string;
+  rentalMode: RentalMode;
   startDate: string;
-  endDate: string;
+  endDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   message?: string | null;
   handoverMethod: HandoverMethod;
   acceptRules: true;
@@ -78,74 +129,51 @@ export const createRentalRequest = async (renter: User, input: CreateRentalInput
   if (!item || !item.isActive || !item.owner.isActive) throw notFound('Predmet sa nenašiel alebo nie je dostupný.');
   if (item.ownerId === renter.id) throw badRequest('Nemôžeš si požičať vlastný predmet.');
 
-  const start = parseDateOnly(input.startDate);
-  const end = parseDateOnly(input.endDate);
-  await validateRentalDates(item, start, end);
+  // Everything (availability, duration, price, fees) is recalculated here – client values are ignored.
+  const { period, price } = await quoteRental(item, input, renter.id);
 
   const duplicate = await prisma.rentalRequest.count({
     where: { itemId: item.id, renterId: renter.id, status: 'PENDING' },
   });
   if (duplicate > 0) throw conflict('Na tento predmet už máš čakajúcu žiadosť.');
 
-  const settings = await getSettings();
-  const price = await calculatePrice(item, start, end, settings, await loadRiskSignals(renter.id, item.ownerId));
   if (price.protectionFeeCents > 0 && !input.acceptProtectionDisclaimer) {
     throw badRequest('Potvrď, že rozumieš, že Ochrana prenájmu nie je poistenie.');
   }
 
-  const rental = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const created = await tx.rentalRequest.create({
       data: {
         itemId: item.id,
         renterId: renter.id,
         ownerId: item.ownerId,
-        startDate: start,
-        endDate: end,
-        rentalDays: price.rentalDays,
+        ...periodAndPriceData(period, price, true),
         message: input.message ?? null,
         handoverMethod: input.handoverMethod,
-        pricePerDayCents: price.pricePerDayCents,
-        rentalPriceCents: price.rentalPriceCents,
-        protectionFeeCents: price.protectionFeeCents,
-        depositCents: price.depositCents,
-        platformFeeCents: price.platformFeeCents,
-        totalCents: price.totalCents,
         protectionMode: price.protectionMode,
         rulesAcceptedAt: new Date(),
         protectionDisclaimerAcceptedAt: input.acceptProtectionDisclaimer ? new Date() : null,
       },
     });
-    if (price.protection?.available) {
-      await tx.protectionQuote.create({
-        data: {
-          itemId: item.id,
-          rentalRequestId: created.id,
-          userId: renter.id,
-          provider: price.protection.provider,
-          mode: price.protection.mode,
-          isDemo: price.protection.isDemo,
-          replacementValueCents: item.replacementValueCents,
-          protectedValueCents: price.protection.protectedValueCents,
-          rentalDays: price.rentalDays,
-          feeCents: price.protection.feeCents,
-          inputs: price.protection.breakdown,
-          expiresAt: new Date(Date.now() + 7 * 86400000),
-        },
-      });
-    }
+    await saveProtectionQuote(tx, {
+      itemId: item.id,
+      rentalRequestId: created.id,
+      userId: renter.id,
+      replacementValueCents: item.replacementValueCents,
+      price,
+    });
     await notify(
       item.ownerId,
       {
         type: 'RENTAL_REQUESTED',
         title: `Nová žiadosť o požičanie: ${item.title}`,
-        body: `${renter.name} si chce požičať predmet ${toDateOnlyString(start)} – ${toDateOnlyString(end)}.`,
+        body: `${renter.name}: ${describePeriod(period)}`,
         link: `/requests/${created.id}`,
       },
       tx,
     );
     return created;
   });
-  return rental;
 };
 
 /** Side effects when a rental becomes ACCEPTED: protection record + simulated deposit hold. */
@@ -196,7 +224,7 @@ const cancelSideEffects = async (rental: RentalRequest, tx: Tx) => {
 export type RentalAction =
   | { action: 'ACCEPT'; note?: string }
   | { action: 'REJECT'; note?: string }
-  | { action: 'PROPOSE_DATES'; startDate: string; endDate: string; note?: string }
+  | { action: 'PROPOSE_DATES'; startDate: string; endDate?: string; startTime?: string; endTime?: string; note?: string }
   | { action: 'ACCEPT_PROPOSAL' }
   | { action: 'DECLINE_PROPOSAL' }
   | { action: 'CANCEL'; note?: string }
@@ -251,13 +279,15 @@ export const changeRentalStatus = async (user: User, rentalId: string, input: Re
     switch (input.action) {
       case 'ACCEPT': {
         await lockItem(tx, item.id);
-        await validateRentalDates(item, rental.startDate, rental.endDate, rental.id, tx);
+        await checkItemAvailability(item, periodOfRental(rental), { excludeRentalId: rental.id, tx });
         const updated = await setStatus(tx, rental, {
           status: 'ACCEPTED',
           acceptedAt: new Date(),
           ownerNote: input.note ?? rental.ownerNote,
           proposedStartDate: null,
           proposedEndDate: null,
+          proposedStartTime: null,
+          proposedEndTime: null,
         });
         await onAccepted(updated, tx);
         await notify(counterpart, { type: 'RENTAL_ACCEPTED', title: `Žiadosť prijatá: ${item.title}`, link }, tx);
@@ -269,67 +299,59 @@ export const changeRentalStatus = async (user: User, rentalId: string, input: Re
         return updated;
       }
       case 'PROPOSE_DATES': {
-        const start = parseDateOnly(input.startDate);
-        const end = parseDateOnly(input.endDate);
-        await validateRentalDates(item, start, end, rental.id, tx);
+        // The proposal keeps the rental mode of the original request.
+        const period = resolvePeriod({
+          rentalMode: rental.rentalMode,
+          startDate: input.startDate,
+          endDate: input.endDate,
+          startTime: input.startTime,
+          endTime: input.endTime,
+        });
+        await checkItemAvailability(item, period, { excludeRentalId: rental.id, tx });
         const updated = await setStatus(tx, rental, {
-          proposedStartDate: start,
-          proposedEndDate: end,
+          proposedStartDate: new Date(`${period.startDate}T00:00:00Z`),
+          proposedEndDate: new Date(`${period.endDate}T00:00:00Z`),
+          proposedStartTime: period.startTime,
+          proposedEndTime: period.endTime,
           ownerNote: input.note ?? null,
         });
         await notify(
           counterpart,
-          {
-            type: 'RENTAL_DATES_PROPOSED',
-            title: `Majiteľ navrhol iný termín: ${item.title}`,
-            body: `${input.startDate} – ${input.endDate}`,
-            link,
-          },
+          { type: 'RENTAL_DATES_PROPOSED', title: `Majiteľ navrhol iný termín: ${item.title}`, body: describePeriod(period), link },
           tx,
         );
         return updated;
       }
       case 'ACCEPT_PROPOSAL': {
-        const start = rental.proposedStartDate!;
-        const end = rental.proposedEndDate!;
         await lockItem(tx, item.id);
-        await validateRentalDates(item, start, end, rental.id, tx);
-        // Re-price server-side for the new dates.
+        const period = resolvePeriod({
+          rentalMode: rental.rentalMode,
+          startDate: rental.proposedStartDate!.toISOString().slice(0, 10),
+          endDate: rental.proposedEndDate!.toISOString().slice(0, 10),
+          startTime: rental.proposedStartTime,
+          endTime: rental.proposedEndTime,
+        });
+        await checkItemAvailability(item, period, { excludeRentalId: rental.id, tx });
+        // Re-price server-side for the new period.
         const settings = await getSettings();
-        const price = await calculatePrice(item, start, end, settings, await loadRiskSignals(rental.renterId, rental.ownerId));
+        const price = await calculateRentalPrice(item, period.duration, settings, await loadRiskSignals(rental.renterId, rental.ownerId));
         const updated = await setStatus(tx, rental, {
           status: 'ACCEPTED',
           acceptedAt: new Date(),
-          startDate: start,
-          endDate: end,
-          rentalDays: price.rentalDays,
-          pricePerDayCents: price.pricePerDayCents,
-          rentalPriceCents: price.rentalPriceCents,
           // Keep protection only if the renter agreed to the disclaimer earlier.
-          protectionFeeCents: rental.protectionDisclaimerAcceptedAt ? price.protectionFeeCents : 0,
-          depositCents: price.depositCents,
-          platformFeeCents: price.platformFeeCents,
-          totalCents:
-            price.totalCents - (rental.protectionDisclaimerAcceptedAt ? 0 : price.protectionFeeCents),
+          ...periodAndPriceData(period, price, Boolean(rental.protectionDisclaimerAcceptedAt)),
           proposedStartDate: null,
           proposedEndDate: null,
+          proposedStartTime: null,
+          proposedEndTime: null,
         });
-        if (price.protection?.available && rental.protectionDisclaimerAcceptedAt) {
-          await tx.protectionQuote.create({
-            data: {
-              itemId: item.id,
-              rentalRequestId: rental.id,
-              userId: rental.renterId,
-              provider: price.protection.provider,
-              mode: price.protection.mode,
-              isDemo: price.protection.isDemo,
-              replacementValueCents: item.replacementValueCents,
-              protectedValueCents: price.protection.protectedValueCents,
-              rentalDays: price.rentalDays,
-              feeCents: price.protection.feeCents,
-              inputs: price.protection.breakdown,
-              expiresAt: new Date(Date.now() + 7 * 86400000),
-            },
+        if (rental.protectionDisclaimerAcceptedAt) {
+          await saveProtectionQuote(tx, {
+            itemId: item.id,
+            rentalRequestId: rental.id,
+            userId: rental.renterId,
+            replacementValueCents: item.replacementValueCents,
+            price,
           });
         }
         await onAccepted(updated, tx);
@@ -337,7 +359,7 @@ export const changeRentalStatus = async (user: User, rentalId: string, input: Re
         return updated;
       }
       case 'DECLINE_PROPOSAL': {
-        const updated = await setStatus(tx, rental, { proposedStartDate: null, proposedEndDate: null });
+        const updated = await setStatus(tx, rental, { proposedStartDate: null, proposedEndDate: null, proposedStartTime: null, proposedEndTime: null });
         await notify(counterpart, { type: 'RENTAL_PROPOSAL_DECLINED', title: `Navrhnutý termín odmietnutý: ${item.title}`, link }, tx);
         return updated;
       }

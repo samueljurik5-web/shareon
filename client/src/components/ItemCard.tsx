@@ -2,7 +2,7 @@ import { Heart, MapPin, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import type { ItemCard as Item } from '../api/types';
-import { CONDITION_LABELS, formatEur, imageUrl } from '../lib/format';
+import { CONDITION_LABELS, imageUrl, priceLabels } from '../lib/format';
 import { RatingInline } from './Rating';
 import { del, post } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -51,9 +51,12 @@ export function ItemCard({ item }: { item: Item }) {
         <h3 className="line-clamp-2 text-sm font-bold leading-snug sm:text-base">
           <Link to={`/items/${item.id}`} className="hover:underline">{item.title}</Link>
         </h3>
-        <div className="flex items-baseline gap-1">
-          <span className="text-gradient text-lg font-extrabold">{formatEur(item.pricePerDayCents)}</span>
-          <span className="text-xs text-ink-3">/ deň</span>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          {priceLabels(item).map((p, i) => (
+            <span key={p.mode} className={i === 0 ? 'text-gradient text-lg font-extrabold' : 'text-sm font-bold text-ink-2'}>
+              {p.mode === 'DAILY' && i > 0 ? `od ${p.text}` : p.text}
+            </span>
+          ))}
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-2">
           <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden />{item.city}</span>

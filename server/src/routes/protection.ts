@@ -4,26 +4,29 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { parseBody } from '../middleware/validate.js';
 import { currentUser, optionalAuth, requireAdmin, requireAuth } from '../middleware/auth.js';
-import { dateOnly, euroAmount } from '../lib/validation.js';
-import { parseDateOnly } from '../lib/dates.js';
+import { euroAmount, rentalPeriodFields } from '../lib/validation.js';
 import { toCents } from '../lib/money.js';
-import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { conflict, notFound } from '../lib/errors.js';
 import { getSettings } from '../services/settings.js';
-import { calculatePrice, calculatePriceForDays, loadRiskSignals } from '../services/pricing.js';
-import { createProtectionForRental, loadRentalForParty, MAX_RENTAL_DAYS } from '../services/rentals.js';
+import { calculateRentalPrice } from '../services/pricing.js';
+import { createProtectionForRental, loadRentalForParty, quoteRental, saveProtectionQuote } from '../services/rentals.js';
 import { getProtectionProvider, DEMO_LABEL, DEMO_NOTICE_SK, PROTECTION_NOTICE, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
 import { audit } from '../services/audit.js';
 
 const router = Router();
 
 const quoteSchema = z.union([
-  z.object({ itemId: z.string().min(1).max(64), startDate: dateOnly, endDate: dateOnly }),
-  // Preview for a listing that is not yet published (Add item form).
+  // Quote for a concrete item & period (same validation as /api/pricing/quote; stores a ProtectionQuote).
+  z.object({ itemId: z.string().min(1).max(64), ...rentalPeriodFields }),
+  // Preview for a listing that is not yet published (Add/Edit item form).
   z.object({
     category: z.enum(['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'OTHER']),
-    pricePerDay: euroAmount('Cena za deň', 500),
+    rentalMode: z.enum(['DAILY', 'HOURLY']).default('DAILY'),
+    pricePerDay: euroAmount('Cena za deň', 500).optional(),
+    pricePerHour: euroAmount('Cena za hodinu', 200).optional(),
     replacementValue: euroAmount('Hodnota predmetu', 20000),
-    rentalDays: z.coerce.number().int().min(1).max(MAX_RENTAL_DAYS).default(3),
+    rentalDays: z.coerce.number().int().min(1).max(90).default(3),
+    rentalHours: z.coerce.number().min(0.25).max(24).default(4),
     protectionEligible: z.boolean().default(true),
   }),
 ]);
@@ -39,41 +42,28 @@ router.post('/quote', optionalAuth, async (req, res) => {
     demoNotice: DEMO_NOTICE_SK,
   };
   if ('itemId' in data) {
-    const item = await prisma.item.findUnique({ where: { id: data.itemId } });
+    const item = await prisma.item.findUnique({ where: { id: data.itemId }, include: { owner: { select: { isActive: true } } } });
     if (!item || !item.isActive) throw notFound('Predmet sa nenašiel.');
-    const start = parseDateOnly(data.startDate);
-    const end = parseDateOnly(data.endDate);
-    if (end < start) throw badRequest('Dátum vrátenia musí byť po dátume začiatku.');
-    const price = await calculatePrice(item, start, end, settings, await loadRiskSignals(req.user?.id ?? null, item.ownerId));
-    let quoteId: string | null = null;
-    if (price.protection?.available) {
-      const q = await prisma.protectionQuote.create({
-        data: {
-          itemId: item.id,
-          userId: req.user?.id ?? null,
-          provider: price.protection.provider,
-          mode: price.protection.mode,
-          isDemo: price.protection.isDemo,
-          replacementValueCents: item.replacementValueCents,
-          protectedValueCents: price.protection.protectedValueCents,
-          rentalDays: price.rentalDays,
-          feeCents: price.protection.feeCents,
-          inputs: price.protection.breakdown,
-          expiresAt: new Date(Date.now() + 24 * 3600000),
-        },
-      });
-      quoteId = q.id;
-    }
-    return res.json({ quoteId, price, ...notices });
+    const { price } = await quoteRental(item, data, req.user?.id ?? null);
+    const q = await saveProtectionQuote(prisma, {
+      itemId: item.id,
+      userId: req.user?.id ?? null,
+      replacementValueCents: item.replacementValueCents,
+      price,
+      ttlMs: 24 * 3600000,
+    });
+    return res.json({ quoteId: q?.id ?? null, price, ...notices });
   }
-  const price = await calculatePriceForDays(
+  const hourly = data.rentalMode === 'HOURLY';
+  const price = await calculateRentalPrice(
     {
       category: data.category,
-      pricePerDayCents: toCents(data.pricePerDay),
+      dailyPriceCents: data.pricePerDay != null ? toCents(data.pricePerDay) : null,
+      hourlyPriceCents: data.pricePerHour != null ? toCents(data.pricePerHour) : null,
       replacementValueCents: toCents(data.replacementValue),
       protectionEligible: data.protectionEligible,
     },
-    data.rentalDays,
+    hourly ? { mode: 'HOURLY', minutes: Math.round(data.rentalHours * 60) } : { mode: 'DAILY', days: data.rentalDays },
     settings,
   );
   res.json({ quoteId: null, price, ...notices });

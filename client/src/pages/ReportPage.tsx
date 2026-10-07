@@ -48,7 +48,7 @@ export function ReportPage() {
   ].sort((a, b) => a.at.localeCompare(b.at));
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 [&>*]:min-w-0 lg:grid-cols-[1.4fr_1fr]">
       <div className="space-y-5">
         <div className="card space-y-3 p-5">
           <div className="flex flex-wrap items-center gap-2">

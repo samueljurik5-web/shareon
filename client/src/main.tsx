@@ -5,9 +5,11 @@ import './styles/index.css';
 import { App } from './App';
 import { AuthProvider } from './context/AuthContext';
 import { UiProvider } from './context/UiContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <UiProvider>
@@ -15,5 +17,6 @@ createRoot(document.getElementById('root')!).render(
         </UiProvider>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 );

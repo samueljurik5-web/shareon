@@ -19,6 +19,7 @@ import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/uploads.js';
 import notificationRoutes from './routes/notifications.js';
 import settingsRoutes from './routes/settings.js';
+import pricingRoutes from './routes/pricing.js';
 
 export const createApp = () => {
   const app = express();
@@ -81,6 +82,7 @@ export const createApp = () => {
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/settings', settingsRoutes);
+  app.use('/api/pricing', pricingRoutes);
   app.use('/api', notFoundHandler);
 
   // Optional: serve the built React app from the same origin (single-service hosting, no CORS needed).

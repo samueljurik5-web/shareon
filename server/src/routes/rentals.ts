@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { parseBody } from '../middleware/validate.js';
 import { currentUser, requireAuth } from '../middleware/auth.js';
-import { dateOnly, euroAmount, uploadedImageUrl } from '../lib/validation.js';
+import { dateOnly, euroAmount, rentalPeriodFields, timeOfDayString, uploadedImageUrl } from '../lib/validation.js';
 import { toCents } from '../lib/money.js';
 import { badRequest } from '../lib/errors.js';
 import { storage } from '../services/storage/index.js';
@@ -34,8 +34,7 @@ const handoverMethod = z.enum(['PERSONAL_PICKUP', 'OWNER_DELIVERY', 'MEET_ELSEWH
 const createSchema = z
   .object({
     itemId: z.string({ required_error: 'Chýba predmet.' }).min(1).max(64),
-    startDate: dateOnly,
-    endDate: dateOnly,
+    ...rentalPeriodFields,
     message: z.string().trim().max(1000, 'Správa je príliš dlhá.').optional().nullable(),
     handoverMethod,
     acceptRules: z.literal(true, { errorMap: () => ({ message: 'Musíš súhlasiť s pravidlami ShareOn.' }) }),
@@ -112,17 +111,28 @@ router.get('/:id', async (req, res) => {
       endDate: toDateOnlyString(full.endDate),
       proposedStartDate: full.proposedStartDate ? toDateOnlyString(full.proposedStartDate) : null,
       proposedEndDate: full.proposedEndDate ? toDateOnlyString(full.proposedEndDate) : null,
-      rentalDays: full.rentalDays,
+      rentalMode: full.rentalMode,
+      startTime: full.startTime,
+      endTime: full.endTime,
+      startAt: full.startAt,
+      endAt: full.endAt,
+      durationMinutes: full.durationMinutes,
+      durationDays: full.durationDays,
+      proposedStartTime: full.proposedStartTime,
+      proposedEndTime: full.proposedEndTime,
+      // Hourly/daily rental past its end and not yet returned → late return can be reported.
+      isOverdue: ['ACTIVE', 'RETURN_PENDING'].includes(full.status) && full.endAt.getTime() < Date.now(),
       message: full.message,
       ownerNote: full.ownerNote,
       handoverMethod: full.handoverMethod,
       price: {
-        pricePerDayCents: full.pricePerDayCents,
+        pricePerUnitCents: full.pricePerUnitCents,
         rentalPriceCents: full.rentalPriceCents,
         protectionFeeCents: full.protectionFeeCents,
         depositCents: full.depositCents,
         platformFeeCents: full.platformFeeCents,
         totalCents: full.totalCents,
+        refundableCents: full.refundableCents,
         currency: full.currency,
       },
       protectionMode: full.protectionMode,
@@ -165,7 +175,14 @@ const statusSchema = z.discriminatedUnion(
   [
     z.object({ action: z.literal('ACCEPT'), note: z.string().trim().max(500).optional() }),
     z.object({ action: z.literal('REJECT'), note: z.string().trim().max(500).optional() }),
-    z.object({ action: z.literal('PROPOSE_DATES'), startDate: dateOnly, endDate: dateOnly, note: z.string().trim().max(500).optional() }),
+    z.object({
+      action: z.literal('PROPOSE_DATES'),
+      startDate: dateOnly,
+      endDate: dateOnly.optional(),
+      startTime: timeOfDayString.optional(),
+      endTime: timeOfDayString.optional(),
+      note: z.string().trim().max(500).optional(),
+    }),
     z.object({ action: z.literal('ACCEPT_PROPOSAL') }),
     z.object({ action: z.literal('DECLINE_PROPOSAL') }),
     z.object({ action: z.literal('CANCEL'), note: z.string().trim().max(500).optional() }),
@@ -211,7 +228,7 @@ router.post('/:id/return', async (req, res) => {
 
 export const reportSchema = z.object({
   type: z.enum(
-    ['ITEM_DAMAGED', 'ITEM_NOT_RETURNED', 'ITEM_DIFFERENT_THAN_DESCRIPTION', 'USER_BEHAVIOR', 'PAYMENT_PROBLEM', 'OTHER'],
+    ['ITEM_DAMAGED', 'ITEM_NOT_RETURNED', 'LATE_RETURN', 'ITEM_DIFFERENT_THAN_DESCRIPTION', 'USER_BEHAVIOR', 'PAYMENT_PROBLEM', 'OTHER'],
     { errorMap: () => ({ message: 'Vyber typ problému.' }) },
   ),
   description: z.string({ required_error: 'Popíš problém.' }).trim().min(20, 'Popíš problém aspoň 20 znakmi.').max(3000),

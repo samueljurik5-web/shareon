@@ -1,4 +1,4 @@
-import type { Category, ProtectionMode, ProtectionStatus } from '@prisma/client';
+import type { Category, ProtectionMode, ProtectionStatus, RentalMode } from '@prisma/client';
 
 export interface RiskSignals {
   /** Completed rentals of the renter (more history = lower risk) */
@@ -9,12 +9,17 @@ export interface RiskSignals {
   ownerAverageRating: number | null;
 }
 
+/** Rental duration in the unit of its mode – minutes for hourly rentals, days for daily ones. */
+export type RentalDuration = { mode: 'DAILY'; days: number } | { mode: 'HOURLY'; minutes: number };
+
 export interface ProtectionQuoteInput {
   replacementValueCents: number;
   category: Category;
-  rentalDays: number;
+  duration: RentalDuration;
   riskSignals: RiskSignals;
 }
+
+export type { RentalMode };
 
 export interface ProtectionQuote {
   provider: string;

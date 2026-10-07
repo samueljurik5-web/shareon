@@ -3,10 +3,11 @@ export type Condition = 'NEW' | 'VERY_GOOD' | 'GOOD' | 'USED' | 'WORN';
 export type RentalStatus =
   | 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'ACTIVE' | 'RETURN_PENDING' | 'RETURNED' | 'DISPUTED' | 'COMPLETED';
 export type ProtectionMode = 'NONE' | 'PROTECTION_FEE' | 'INSURANCE';
+export type RentalMode = 'DAILY' | 'HOURLY';
 export type DepositStatus =
   | 'NOT_REQUIRED' | 'PENDING' | 'HELD' | 'RELEASE_REQUESTED' | 'RELEASED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | 'DISPUTED';
 export type ReportType =
-  | 'ITEM_DAMAGED' | 'ITEM_NOT_RETURNED' | 'ITEM_DIFFERENT_THAN_DESCRIPTION' | 'USER_BEHAVIOR' | 'PAYMENT_PROBLEM' | 'OTHER';
+  | 'ITEM_DAMAGED' | 'ITEM_NOT_RETURNED' | 'LATE_RETURN' | 'ITEM_DIFFERENT_THAN_DESCRIPTION' | 'USER_BEHAVIOR' | 'PAYMENT_PROBLEM' | 'OTHER';
 export type ReportStatus =
   | 'OPEN' | 'UNDER_REVIEW' | 'NEEDS_MORE_INFORMATION' | 'APPROVED' | 'PARTIALLY_APPROVED' | 'REJECTED' | 'RESOLVED';
 
@@ -21,7 +22,8 @@ export interface Me {
 export interface UserStats { completedRentals: number; successfulReturns: number; cancelledRentals: number }
 
 export interface ItemCard {
-  id: string; title: string; category: Category; description: string; pricePerDayCents: number; city: string;
+  id: string; title: string; category: Category; description: string; city: string;
+  dailyPriceCents: number | null; hourlyPriceCents: number | null; dailyRentalEnabled: boolean; hourlyRentalEnabled: boolean;
   condition: Condition; isActive: boolean; deactivatedByAdmin: boolean; createdAt: string;
   images: { id: string; url: string }[];
   owner: { id: string; name: string; city: string; avatarUrl: string | null; rating: RatingShort };
@@ -29,8 +31,9 @@ export interface ItemCard {
 }
 
 export interface PriceBreakdown {
-  rentalDays: number; pricePerDayCents: number; rentalPriceCents: number; protectionFeeCents: number;
-  depositCents: number; platformFeeCents: number; totalCents: number; currency: 'EUR';
+  rentalMode: RentalMode; durationMinutes: number | null; durationDays: number | null; units: number; unit: 'HOUR' | 'DAY';
+  pricePerUnitCents: number; rentalPriceCents: number; protectionFeeCents: number;
+  depositCents: number; platformFeeCents: number; totalCents: number; refundableCents: number; currency: 'EUR';
   protectionMode: ProtectionMode; protectionAvailable: boolean;
   protection: null | { provider: string; isDemo: boolean; isInsurance: boolean; available: boolean; feeCents: number; protectedValueCents: number; disclaimer: string; breakdown: Record<string, unknown> };
 }
@@ -38,8 +41,12 @@ export interface PriceBreakdown {
 export interface ItemDetail extends Omit<ItemCard, 'owner' | 'rating'> {
   availableFrom: string; availableTo: string; replacementValueCents: number; serialNote?: string | null;
   protectionEligible: boolean;
+  minRentalHours: number; maxRentalHours: number; minRentalDays: number; maxRentalDays: number;
+  availableFromTime: string; availableToTime: string; bufferHours: number;
   owner: { id: string; name: string; city: string; bio: string | null; avatarUrl: string | null; createdAt: string; rating: RatingSummary };
-  rating: RatingSummary; isOwner: boolean; blockedRanges: { start: string; end: string }[]; estimate3Days: PriceBreakdown;
+  rating: RatingSummary; isOwner: boolean;
+  blockedRanges: { mode: RentalMode; start: string; end: string; startTime: string | null; endTime: string | null }[];
+  estimateDaily: PriceBreakdown | null; estimateHourly: PriceBreakdown | null;
 }
 
 export interface Party { id: string; name: string; city: string; avatarUrl: string | null; phone: string | null; email: string | null }
@@ -49,10 +56,16 @@ export interface HandoverRecord {
   confirmedAt: string; user: { id: string; name: string }; photos: { id: string; url: string }[];
 }
 
-export interface RentalDetail {
-  id: string; status: RentalStatus; startDate: string; endDate: string; proposedStartDate: string | null; proposedEndDate: string | null;
-  rentalDays: number; message: string | null; ownerNote: string | null; handoverMethod: string;
-  price: { pricePerDayCents: number; rentalPriceCents: number; protectionFeeCents: number; depositCents: number; platformFeeCents: number; totalCents: number; currency: string };
+export interface RentalPeriodFields {
+  rentalMode: RentalMode; startDate: string; endDate: string; startTime: string | null; endTime: string | null;
+  durationMinutes: number | null; durationDays: number | null;
+}
+
+export interface RentalDetail extends RentalPeriodFields {
+  id: string; status: RentalStatus; proposedStartDate: string | null; proposedEndDate: string | null;
+  proposedStartTime: string | null; proposedEndTime: string | null; startAt: string; endAt: string; isOverdue: boolean;
+  message: string | null; ownerNote: string | null; handoverMethod: string;
+  price: { pricePerUnitCents: number; rentalPriceCents: number; protectionFeeCents: number; depositCents: number; platformFeeCents: number; totalCents: number; refundableCents: number; currency: string };
   protectionMode: ProtectionMode; createdAt: string; acceptedAt: string | null; activeAt: string | null; returnedAt: string | null; completedAt: string | null; cancelledAt: string | null;
   item: { id: string; title: string; category: Category; images: { id: string; url: string }[]; replacementValueCents: number };
   renter: Party; owner: Party; contactVisible: boolean;
@@ -65,8 +78,8 @@ export interface RentalDetail {
   viewerRole: 'OWNER' | 'RENTER' | null; availableActions: string[];
 }
 
-export interface RentalListEntry {
-  id: string; status: RentalStatus; startDate: string; endDate: string; totalCents: number; rentalDays: number; createdAt: string;
+export interface RentalListEntry extends RentalPeriodFields {
+  id: string; status: RentalStatus; totalCents: number; createdAt: string;
   item: { id: string; title: string; category: Category; images: { url: string }[] };
   renter: { id: string; name: string }; owner: { id: string; name: string };
   reviews: { id: string; type: string; authorId: string }[]; itemReview: { id: string } | null;

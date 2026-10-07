@@ -49,5 +49,6 @@ inviting real users.
 | Uploads | Local disk, magic-byte validation, no resizing / EXIF stripping / malware scan | `StorageProvider` (S3, Cloudinary) |
 | Auth | JWT bearer token in localStorage; logout revokes all sessions (tokenVersion) | httpOnly cookies + refresh tokens, e-mail verification, password reset |
 | Disputes | Resolving/deciding the last open report moves a disputed rental to COMPLETED | Richer resolution states |
+| Pending requests | Only accepted rentals block the calendar; several pending requests may overlap until the owner accepts one | Auto-reject overlapping pending requests |
 | Cancellation | Renter cancels while pending; either party may cancel an accepted rental before handover | Cancellation policy & fees |
-| Rental length | Max 30 days; days = end − start (same day = 1) | Hourly rentals |
+| Rental length | Daily: inclusive days within the item's min/max (≤ 90). Hourly: single day, 15-min steps, within the item's time window | Overnight / multi-day hourly slots, per-weekday opening hours |

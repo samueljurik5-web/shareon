@@ -12,12 +12,14 @@ describe('rental requests', () => {
     const res = await api()
       .post('/api/rental-requests')
       .set(renter.auth)
-      .send({ ...requestBody(item.id, 5, 8), totalCents: 1, rentalPriceCents: 1, protectionFeeCents: 0, renterId: owner.user.id, status: 'COMPLETED' })
+      .send({ ...requestBody(item.id, 5, 7), totalCents: 1, rentalPriceCents: 1, protectionFeeCents: 0, renterId: owner.user.id, status: 'COMPLETED' })
       .expect(201);
     const rental = await prisma.rentalRequest.findUniqueOrThrow({ where: { id: res.body.rentalRequest.id } });
     expect(rental.status).toBe('PENDING');
     expect(rental.renterId).toBe(renter.user.id);
-    expect(rental.rentalDays).toBe(3);
+    expect(rental.durationDays).toBe(3);
+    expect(rental.rentalMode).toBe('DAILY');
+    expect(rental.refundableCents).toBe(3000);
     expect(rental.rentalPriceCents).toBe(2400);
     expect(rental.protectionFeeCents).toBe(200);
     expect(rental.depositCents).toBe(3000);
@@ -98,14 +100,14 @@ describe('rental requests', () => {
     const res = await api().patch(`/api/rental-requests/${rentalId}/status`).set(renter.auth).send({ action: 'ACCEPT_PROPOSAL' }).expect(200);
     expect(res.body.rentalRequest.status).toBe('ACCEPTED');
     const rental = await prisma.rentalRequest.findUniqueOrThrow({ where: { id: rentalId } });
-    expect(rental.rentalDays).toBe(5);
-    expect(rental.rentalPriceCents).toBe(4000);
+    expect(rental.durationDays).toBe(6); // 10.–15. inclusive
+    expect(rental.rentalPriceCents).toBe(4800);
   });
 
   it('prevents overlapping accepted rentals', async () => {
     const { owner, item, rentalId } = await setupPendingRental();
     const renter2 = await createUser();
-    const second = await api().post('/api/rental-requests').set(renter2.auth).send(requestBody(item.id, 6, 9)).expect(201);
+    const second = await api().post('/api/rental-requests').set(renter2.auth).send(requestBody(item.id, 6, 8)).expect(201);
     await api().patch(`/api/rental-requests/${rentalId}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(200);
     await api().patch(`/api/rental-requests/${second.body.rentalRequest.id}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(409);
   });

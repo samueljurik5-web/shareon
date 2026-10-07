@@ -36,3 +36,14 @@ export const itemImageUrl = z
     (v) => /^\/uploads\/[a-f0-9]{32}\.(jpg|png|webp)$/.test(v) || PLACEHOLDER_IMAGE.test(v),
     'Neplatný odkaz na fotografiu.',
   );
+
+export const timeOfDayString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Zadaj čas vo formáte HH:MM.');
+
+/** Requested rental period – shared by POST /api/pricing/quote and POST /api/rental-requests. */
+export const rentalPeriodFields = {
+  rentalMode: z.enum(['DAILY', 'HOURLY'], { errorMap: () => ({ message: 'Vyber spôsob prenájmu – na hodiny alebo na dni.' }) }),
+  startDate: dateOnly,
+  endDate: dateOnly.optional().nullable(),
+  startTime: timeOfDayString.optional().nullable(),
+  endTime: timeOfDayString.optional().nullable(),
+};

@@ -7,6 +7,7 @@ import { get, post } from '../api/client';
 import type { Notification } from '../api/types';
 import { formatDateTime } from '../lib/format';
 import { Avatar } from './Avatar';
+import { ErrorBoundary } from './ErrorBoundary';
 
 const desktopLinks = [
   { to: '/search', label: 'Objaviť' },
@@ -66,7 +67,9 @@ export function Layout() {
       </header>
 
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 md:pb-12">
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <footer className="hidden border-t border-line py-6 text-center text-xs text-ink-3 md:block">

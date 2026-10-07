@@ -14,7 +14,8 @@ import { BLOCKING_RENTAL_STATUSES, itemInclude, serializeItems } from '../servic
 import { itemRatingSummary, userRatingSummary } from '../services/stats.js';
 import { getSettings } from '../services/settings.js';
 import { isProtectionAvailableFor } from '../services/protection/index.js';
-import { calculatePriceForDays } from '../services/pricing.js';
+import { calculatePriceForDays, calculateRentalPrice } from '../services/pricing.js';
+import { addDaysToDate, zonedToUtc } from '../lib/time.js';
 import { publicUser } from '../lib/serialize.js';
 import { notifyAdmins } from '../services/notifications.js';
 
@@ -27,6 +28,61 @@ const conditionEnum = z.enum(['NEW', 'VERY_GOOD', 'GOOD', 'USED', 'WORN'], {
   errorMap: () => ({ message: 'Vyber stav predmetu.' }),
 });
 
+const intRange = (label: string, min: number, max: number) =>
+  z.coerce
+    .number({ invalid_type_error: `${label} musí byť číslo.` })
+    .int(`${label} musí byť celé číslo.`)
+    .min(min, `${label} musí byť aspoň ${min}.`)
+    .max(max, `${label} môže byť najviac ${max}.`);
+
+const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Zadaj čas vo formáte HH:MM.');
+
+interface RentalSettings {
+  dailyRentalEnabled: boolean;
+  hourlyRentalEnabled: boolean;
+  dailyPriceCents: number | null;
+  hourlyPriceCents: number | null;
+  minRentalHours: number;
+  maxRentalHours: number;
+  minRentalDays: number;
+  maxRentalDays: number;
+  availableFromTime: string;
+  availableToTime: string;
+}
+
+/** Cross-field rules for rental modes (also enforced by DB CHECK constraints). */
+const assertRentalSettings = (r: RentalSettings) => {
+  const errors: { path: string; message: string }[] = [];
+  if (!r.dailyRentalEnabled && !r.hourlyRentalEnabled) {
+    errors.push({ path: 'rentalModes', message: 'Povoľ aspoň jeden spôsob prenájmu – na dni alebo na hodiny.' });
+  }
+  if (r.dailyRentalEnabled && !(r.dailyPriceCents && r.dailyPriceCents >= 50)) {
+    errors.push({ path: 'dailyPrice', message: 'Pri prenájme na dni je cena za deň povinná (aspoň 0,50 €).' });
+  }
+  if (r.hourlyRentalEnabled && !(r.hourlyPriceCents && r.hourlyPriceCents >= 10)) {
+    errors.push({ path: 'hourlyPrice', message: 'Pri prenájme na hodiny je cena za hodinu povinná (aspoň 0,10 €).' });
+  }
+  if (r.maxRentalHours < r.minRentalHours) {
+    errors.push({ path: 'maxRentalHours', message: 'Maximálny počet hodín musí byť aspoň taký ako minimálny.' });
+  }
+  if (r.maxRentalDays < r.minRentalDays) {
+    errors.push({ path: 'maxRentalDays', message: 'Maximálny počet dní musí byť aspoň taký ako minimálny.' });
+  }
+  if (r.availableToTime <= r.availableFromTime) {
+    errors.push({ path: 'availableToTime', message: 'Čas „dostupné do“ musí byť neskôr ako čas „dostupné od“.' });
+  }
+  if (r.hourlyRentalEnabled) {
+    const window = Number(r.availableToTime.slice(0, 2)) * 60 + Number(r.availableToTime.slice(3)) -
+      (Number(r.availableFromTime.slice(0, 2)) * 60 + Number(r.availableFromTime.slice(3)));
+    if (window < r.minRentalHours * 60) {
+      errors.push({ path: 'minRentalHours', message: 'Minimálna dĺžka prenájmu sa nezmestí do denného časového okna.' });
+    }
+  }
+  if (errors.length) throw badRequest('Skontroluj nastavenia prenájmu.', errors);
+};
+
+const centsOrNull = (v: number | null | undefined) => (v == null ? null : toCents(v));
+
 const mustBeTrue = (message: string) => z.literal(true, { errorMap: () => ({ message }) });
 
 const itemBase = z.object({
@@ -37,14 +93,25 @@ const itemBase = z.object({
     .trim()
     .min(20, 'Popis musí mať aspoň 20 znakov.')
     .max(3000, 'Popis je príliš dlhý.'),
-  pricePerDay: euroAmount('Cena za deň', 500).refine((v) => v >= 0.5, 'Cena za deň musí byť aspoň 0,50 €.'),
+  // Rental modes – the owner chooses daily only, hourly only, or both.
+  dailyRentalEnabled: z.boolean().optional(),
+  hourlyRentalEnabled: z.boolean().optional(),
+  dailyPrice: euroAmount('Cena za deň', 500).nullable().optional(),
+  hourlyPrice: euroAmount('Cena za hodinu', 200).nullable().optional(),
+  minRentalHours: intRange('Minimálny počet hodín', 1, 24).optional(),
+  maxRentalHours: intRange('Maximálny počet hodín', 1, 24).optional(),
+  minRentalDays: intRange('Minimálny počet dní', 1, 90).optional(),
+  maxRentalDays: intRange('Maximálny počet dní', 1, 90).optional(),
+  availableFromTime: timeOfDay.optional(),
+  availableToTime: timeOfDay.optional(),
+  bufferHours: intRange('Rezerva medzi prenájmami', 0, 72).optional(),
   city: z.string({ required_error: 'Mesto je povinné.' }).trim().min(2, 'Zadaj mesto.').max(80),
   condition: conditionEnum,
   availableFrom: dateOnly,
   availableTo: dateOnly,
   replacementValue: euroAmount('Hodnota predmetu', 20000).refine((v) => v >= 1, 'Zadaj odhadovanú hodnotu predmetu.'),
   serialNote: z.string().trim().max(200, 'Poznámka je príliš dlhá.').optional().nullable(),
-  protectionEligible: z.boolean().default(true),
+  protectionEligible: z.boolean().optional(),
   images: z
     .array(itemImageUrl, { required_error: 'Pridaj aspoň 1 fotografiu.' })
     .min(1, 'Pridaj aspoň 1 fotografiu.')
@@ -91,6 +158,7 @@ const listQuery = z.object({
   from: dateOnly.optional(),
   to: dateOnly.optional(),
   protection: z.enum(['true', 'false']).optional(),
+  mode: z.enum(['DAILY', 'HOURLY']).optional(),
   ownerId: z.string().max(64).optional(),
   favorites: z.enum(['true', 'false']).optional(),
   sort: z.enum(['newest', 'price_asc', 'price_desc', 'rating']).default('newest'),
@@ -109,12 +177,8 @@ router.get('/', optionalAuth, async (req, res) => {
   }
   if (q.category) where.category = q.category;
   if (q.city) where.city = { contains: q.city, mode: 'insensitive' };
-  if (q.minPrice != null || q.maxPrice != null) {
-    where.pricePerDayCents = {
-      ...(q.minPrice != null ? { gte: toCents(q.minPrice) } : {}),
-      ...(q.maxPrice != null ? { lte: toCents(q.maxPrice) } : {}),
-    };
-  }
+  if (q.mode === 'DAILY') where.dailyRentalEnabled = true;
+  if (q.mode === 'HOURLY') where.hourlyRentalEnabled = true;
   if (q.condition?.length) where.condition = { in: q.condition };
   if (q.ownerId) where.ownerId = q.ownerId;
   if (q.favorites === 'true' && req.user) where.favorites = { some: { userId: req.user.id } };
@@ -124,7 +188,11 @@ router.get('/', optionalAuth, async (req, res) => {
     where.availableFrom = { lte: from };
     where.availableTo = { gte: to };
     where.rentals = {
-      none: { status: { in: [...BLOCKING_RENTAL_STATUSES] }, startDate: { lte: to }, endDate: { gte: from } },
+      none: {
+        status: { in: [...BLOCKING_RENTAL_STATUSES] },
+        startAt: { lt: zonedToUtc(addDaysToDate(q.to ?? q.from!, 1)) },
+        endAt: { gt: zonedToUtc(q.from ?? q.to!) },
+      },
     };
   }
 
@@ -137,8 +205,13 @@ router.get('/', optionalAuth, async (req, res) => {
   });
   let items = await serializeItems(candidates, req.user?.id);
   if (q.protection === 'true') items = items.filter((i) => i.protectionAvailable);
-  if (q.sort === 'price_asc') items.sort((a, b) => a.pricePerDayCents - b.pricePerDayCents);
-  if (q.sort === 'price_desc') items.sort((a, b) => b.pricePerDayCents - a.pricePerDayCents);
+  // Price filters/sorting: daily price when offered (or the price in the chosen mode).
+  const priceOf = (i: (typeof items)[number]) =>
+    q.mode === 'HOURLY' ? (i.hourlyPriceCents ?? 0) : (i.dailyPriceCents ?? i.hourlyPriceCents ?? 0);
+  if (q.minPrice != null) items = items.filter((i) => priceOf(i) >= toCents(q.minPrice!));
+  if (q.maxPrice != null) items = items.filter((i) => priceOf(i) <= toCents(q.maxPrice!));
+  if (q.sort === 'price_asc') items.sort((a, b) => priceOf(a) - priceOf(b));
+  if (q.sort === 'price_desc') items.sort((a, b) => priceOf(b) - priceOf(a));
   if (q.sort === 'rating')
     items.sort(
       (a, b) =>
@@ -163,13 +236,18 @@ router.get('/:id', optionalAuth, async (req, res) => {
     userRatingSummary(item.ownerId),
     itemRatingSummary(item.id),
     prisma.rentalRequest.findMany({
-      where: { itemId: item.id, status: { in: [...BLOCKING_RENTAL_STATUSES] }, endDate: { gte: new Date() } },
-      select: { startDate: true, endDate: true },
-      orderBy: { startDate: 'asc' },
+      where: { itemId: item.id, status: { in: [...BLOCKING_RENTAL_STATUSES] }, endAt: { gte: new Date() } },
+      select: { rentalMode: true, startDate: true, endDate: true, startTime: true, endTime: true },
+      orderBy: { startAt: 'asc' },
     }),
     req.user ? prisma.favorite.findUnique({ where: { userId_itemId: { userId: req.user.id, itemId: item.id } } }) : null,
   ]);
-  const estimate = await calculatePriceForDays(item, 3, settings);
+  // Example estimates shown before the renter picks a period.
+  const estimateDaily = item.dailyRentalEnabled && item.dailyPriceCents ? await calculatePriceForDays(item, 3, settings) : null;
+  const estimateHourly =
+    item.hourlyRentalEnabled && item.hourlyPriceCents
+      ? await calculateRentalPrice(item, { mode: 'HOURLY', minutes: Math.max(item.minRentalHours, 2) * 60 }, settings)
+      : null;
 
   res.json({
     item: {
@@ -177,7 +255,17 @@ router.get('/:id', optionalAuth, async (req, res) => {
       title: item.title,
       category: item.category,
       description: item.description,
-      pricePerDayCents: item.pricePerDayCents,
+      dailyRentalEnabled: item.dailyRentalEnabled,
+      hourlyRentalEnabled: item.hourlyRentalEnabled,
+      dailyPriceCents: item.dailyRentalEnabled ? item.dailyPriceCents : null,
+      hourlyPriceCents: item.hourlyRentalEnabled ? item.hourlyPriceCents : null,
+      minRentalHours: item.minRentalHours,
+      maxRentalHours: item.maxRentalHours,
+      minRentalDays: item.minRentalDays,
+      maxRentalDays: item.maxRentalDays,
+      availableFromTime: item.availableFromTime,
+      availableToTime: item.availableToTime,
+      bufferHours: item.bufferHours,
       city: item.city,
       condition: item.condition,
       availableFrom: toDateOnlyString(item.availableFrom),
@@ -195,8 +283,15 @@ router.get('/:id', optionalAuth, async (req, res) => {
       rating,
       isFavorite: Boolean(favorite),
       isOwner,
-      blockedRanges: blocked.map((b) => ({ start: toDateOnlyString(b.startDate), end: toDateOnlyString(b.endDate) })),
-      estimate3Days: estimate,
+      blockedRanges: blocked.map((b) => ({
+        mode: b.rentalMode,
+        start: toDateOnlyString(b.startDate),
+        end: toDateOnlyString(b.endDate),
+        startTime: b.startTime,
+        endTime: b.endTime,
+      })),
+      estimateDaily,
+      estimateHourly,
     },
   });
 });
@@ -204,6 +299,20 @@ router.get('/:id', optionalAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   const user = currentUser(req);
   const data = parseBody(createSchema, req);
+  const rental = {
+    dailyRentalEnabled: data.dailyRentalEnabled ?? true,
+    hourlyRentalEnabled: data.hourlyRentalEnabled ?? false,
+    dailyPriceCents: centsOrNull(data.dailyPrice),
+    hourlyPriceCents: centsOrNull(data.hourlyPrice),
+    minRentalHours: data.minRentalHours ?? 1,
+    maxRentalHours: data.maxRentalHours ?? 12,
+    minRentalDays: data.minRentalDays ?? 1,
+    maxRentalDays: data.maxRentalDays ?? 30,
+    availableFromTime: data.availableFromTime ?? '08:00',
+    availableToTime: data.availableToTime ?? '20:00',
+    bufferHours: data.bufferHours ?? 0,
+  };
+  assertRentalSettings(rental);
   await assertImagesExist(data.images);
   const item = await prisma.item.create({
     data: {
@@ -211,14 +320,14 @@ router.post('/', requireAuth, async (req, res) => {
       title: data.title,
       category: data.category,
       description: data.description,
-      pricePerDayCents: toCents(data.pricePerDay),
+      ...rental,
       city: data.city,
       condition: data.condition,
       availableFrom: parseDateOnly(data.availableFrom),
       availableTo: parseDateOnly(data.availableTo),
       replacementValueCents: toCents(data.replacementValue),
       serialNote: data.serialNote ?? null,
-      protectionEligible: data.protectionEligible,
+      protectionEligible: data.protectionEligible ?? true,
       declarationsAcceptedAt: new Date(),
       images: { create: data.images.map((url, position) => ({ url, position })) },
     },
@@ -244,6 +353,20 @@ router.patch('/:id', requireAuth, async (req, res) => {
   const to = data.availableTo ? parseDateOnly(data.availableTo) : item.availableTo;
   if (to < from) throw badRequest('Dátum „dostupné do“ musí byť po dátume „dostupné od“.');
   if (data.images) await assertImagesExist(data.images);
+  const rentalSettings = {
+    dailyRentalEnabled: data.dailyRentalEnabled ?? item.dailyRentalEnabled,
+    hourlyRentalEnabled: data.hourlyRentalEnabled ?? item.hourlyRentalEnabled,
+    dailyPriceCents: data.dailyPrice !== undefined ? centsOrNull(data.dailyPrice) : item.dailyPriceCents,
+    hourlyPriceCents: data.hourlyPrice !== undefined ? centsOrNull(data.hourlyPrice) : item.hourlyPriceCents,
+    minRentalHours: data.minRentalHours ?? item.minRentalHours,
+    maxRentalHours: data.maxRentalHours ?? item.maxRentalHours,
+    minRentalDays: data.minRentalDays ?? item.minRentalDays,
+    maxRentalDays: data.maxRentalDays ?? item.maxRentalDays,
+    availableFromTime: data.availableFromTime ?? item.availableFromTime,
+    availableToTime: data.availableToTime ?? item.availableToTime,
+    bufferHours: data.bufferHours ?? item.bufferHours,
+  };
+  assertRentalSettings(rentalSettings);
 
   await prisma.$transaction(async (tx) => {
     await tx.item.update({
@@ -252,7 +375,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
         title: data.title,
         category: data.category,
         description: data.description,
-        pricePerDayCents: data.pricePerDay != null ? toCents(data.pricePerDay) : undefined,
+        ...rentalSettings,
         city: data.city,
         condition: data.condition,
         availableFrom: from,

@@ -6,3 +6,4 @@ server/uploads/*
 coverage
 *.log
 uploads-test
+*.tsbuildinfo

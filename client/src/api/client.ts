@@ -52,7 +52,12 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   } catch {
     throw new ApiError(0, 'Nepodarilo sa spojiť so serverom. Skontroluj pripojenie.');
   }
-  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  const isJson = (res.headers.get('content-type') ?? '').includes('application/json');
+  const data = res.status === 204 ? null : isJson ? await res.json().catch(() => null) : null;
+  if (res.ok && res.status !== 204 && data === null) {
+    // e.g. an HTML page returned for an /api route (misconfigured proxy/hosting)
+    throw new ApiError(res.status, 'Server vrátil neočakávanú odpoveď. Skús to znova neskôr.');
+  }
   if (!res.ok) {
     if (res.status === 401 && token) {
       tokenStore.set(null);

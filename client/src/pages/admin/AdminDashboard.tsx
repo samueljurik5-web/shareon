@@ -5,8 +5,8 @@ import { AdminNav } from '../../components/Layout';
 import { ErrorState, Spinner } from '../../components/States';
 import { useAsync } from '../../lib/useAsync';
 import { useUi } from '../../context/UiContext';
-import { ADMIN_WARNING, DEPOSIT_STATUS_LABELS, formatDateTime, formatEur, RENTAL_STATUS_LABELS } from '../../lib/format';
-import type { DepositStatus, RentalStatus } from '../../api/types';
+import { ADMIN_WARNING, DEPOSIT_STATUS_LABELS, formatDateTime, formatDuration, formatEur, formatPeriod, RENTAL_MODE_LABELS, RENTAL_STATUS_LABELS } from '../../lib/format';
+import type { DepositStatus, RentalPeriodFields, RentalStatus } from '../../api/types';
 
 export function AdminWarning() {
   return <p className="notice notice-warn mb-5" role="note">{ADMIN_WARNING}</p>;
@@ -60,17 +60,20 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
 }
 export const Td = ({ children }: { children: React.ReactNode }) => <td className="px-4 py-3 align-top">{children}</td>;
 
-interface RentalRow { id: string; status: RentalStatus; createdAt: string; totalCents: number; item: { title: string }; renter: { name: string }; owner: { name: string }; deposit: { status: DepositStatus } | null; protection: { status: string } | null }
+interface RentalRow extends RentalPeriodFields { id: string; status: RentalStatus; createdAt: string; totalCents: number; item: { title: string }; renter: { name: string }; owner: { name: string }; deposit: { status: DepositStatus } | null; protection: { status: string } | null }
 function Rentals() {
   const { data, loading, error } = useAsync(() => get<{ rentals: RentalRow[] }>('/api/admin/rentals'), []);
   if (loading) return <Spinner />;
   if (error) return <ErrorState message={error.message} />;
   return (
-    <Table head={['Predmet', 'Nájomca → Majiteľ', 'Stav', 'Suma', 'Záloha', 'Vytvorené']}>
+    <Table head={['Predmet', 'Nájomca → Majiteľ', 'Spôsob', 'Termín', 'Trvanie', 'Stav', 'Suma', 'Kaucia', 'Vytvorené']}>
       {data!.rentals.map((r) => (
         <tr key={r.id}>
           <Td><Link className="font-semibold text-neon-blue" to={`/requests/${r.id}`}>{r.item.title}</Link></Td>
           <Td>{r.renter.name} → {r.owner.name}</Td>
+          <Td>{RENTAL_MODE_LABELS[r.rentalMode]}</Td>
+          <Td><span className="whitespace-nowrap">{formatPeriod(r)}</span></Td>
+          <Td>{formatDuration(r)}</Td>
           <Td>{RENTAL_STATUS_LABELS[r.status]}</Td>
           <Td>{formatEur(r.totalCents)}</Td>
           <Td>{r.deposit ? DEPOSIT_STATUS_LABELS[r.deposit.status] : '—'}</Td>

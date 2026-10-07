@@ -44,3 +44,15 @@ built in the authoring sandbox (no Docker daemon).
 - Extra endpoints beyond the spec (listed as *extra* in API.md): uploads, notifications, public settings,
   admin overview/reviews/hide, deposit withhold, own items/favorites.
 - Rental days = end − start (1.10.–4.10. = 3 days; same day = 1). Deposit = 30 % of replacement value (whole euros, capped).
+
+## Phase: rental modes (daily + hourly)
+- Prisma: `RentalMode` enum; Item rental settings (prices per mode, min/max hours/days, daily time window, buffer);
+  RentalRequest stores mode, local dates/times, UTC `startAt/endAt`, `durationMinutes|durationDays`, `pricePerUnitCents`,
+  `refundableCents`. Hand-written, data-preserving migrations (`20261007090000_rental_modes`, `20261007091000_…`) with
+  CHECK constraints; existing rentals converted to the inclusive day rule.
+- Services: `calculateRentalPrice()` (single pricing source), `resolvePeriod()` + `checkItemAvailability()` (mode, past,
+  window, min/max, overlaps incl. buffer), Europe/Bratislava time helpers without extra dependencies.
+- API: `POST /api/pricing/quote` (read-only); rental creation/acceptance/proposals revalidate and reprice on the server.
+- UI: mode chooser („Ako dlho si chceš predmet požičať?“), hourly/daily forms with live server quote, owner rental settings,
+  mode-aware cards, request detail (exact times, late-return flag), requests list, admin rentals table, search filter.
+- Column naming: amounts keep the project's `…Cents` convention (e.g. `hourlyPriceCents`, `rentalPriceCents`, `totalCents`).

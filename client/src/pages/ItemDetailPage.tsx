@@ -1,10 +1,13 @@
-import { CalendarDays, Flag, Heart, MapPin, Pencil, ShieldCheck, Tag } from 'lucide-react';
+import { CalendarDays, Clock, Flag, Heart, MapPin, Pencil, RefreshCw, ShieldCheck, Tag } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, del, get, patch, post } from '../api/client';
-import type { ItemDetail, PriceBreakdown as Price, Review } from '../api/types';
+import type { ItemDetail, PriceBreakdown as Price, RentalMode, Review } from '../api/types';
 import { useAsync } from '../lib/useAsync';
-import { addDaysIso, CATEGORY_LABELS, CONDITION_LABELS, formatDate, formatEur, HANDOVER_LABELS, imageUrl, todayIso } from '../lib/format';
+import {
+  addDaysIso, CATEGORY_LABELS, CONDITION_LABELS, DAILY_RULE_TEXT, daysLabel, formatDate, formatDateRangeLong, formatDayLong, formatEur,
+  formatPeriod, HANDOVER_LABELS, hoursLabel, imageUrl, priceLabels, RENTAL_MODE_LABELS, todayIso,
+} from '../lib/format';
 import { ErrorState, Spinner } from '../components/States';
 import { PriceBreakdown } from '../components/PriceBreakdown';
 import { ProtectionNotice } from '../components/ProtectionNotice';
@@ -54,7 +57,7 @@ export function ItemDetailPage() {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 [&>*]:min-w-0 lg:grid-cols-[1.2fr_1fr]">
       <div className="space-y-5">
         <div className="card overflow-hidden p-0">
           <img src={imageUrl(item.images[img]?.url)} alt={`${item.title} – fotografia ${img + 1}`} className="aspect-[4/3] w-full object-cover" />
@@ -83,7 +86,9 @@ export function ItemDetailPage() {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-ink-2">
-            <span className="text-gradient text-2xl font-extrabold">{formatEur(item.pricePerDayCents)}<span className="text-sm text-ink-3"> / deň</span></span>
+            {priceLabels(item).map((p, i) => (
+              <span key={p.mode} className={i === 0 ? 'text-gradient text-2xl font-extrabold' : 'text-lg font-bold text-ink'}>{p.text}</span>
+            ))}
             <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" aria-hidden />{item.city}</span>
             <RatingInline average={item.rating.average} count={item.rating.count} />
           </div>
@@ -92,14 +97,23 @@ export function ItemDetailPage() {
           )}
           <p className="whitespace-pre-line text-ink-2">{item.description}</p>
           <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div className="card-elevated p-3"><CalendarDays className="mb-1 h-4 w-4 text-neon-blue" aria-hidden />Dostupné {formatDate(item.availableFrom)} – {formatDate(item.availableTo)}</div>
+            <div className="card-elevated p-3">
+              <CalendarDays className="mb-1 h-4 w-4 text-neon-blue" aria-hidden />
+              <strong>Dostupnosť:</strong> {formatDate(item.availableFrom)} – {formatDate(item.availableTo)}
+              {item.hourlyRentalEnabled && <div className="text-xs text-ink-2">Na hodiny denne {item.availableFromTime} – {item.availableToTime}</div>}
+              {item.bufferHours > 0 && <div className="text-xs text-ink-3">Rezerva medzi prenájmami: {hoursLabel(item.bufferHours)}</div>}
+            </div>
             <div className="card-elevated p-3">Odhadovaná hodnota: <strong>{formatEur(item.replacementValueCents)}</strong></div>
           </div>
           {item.blockedRanges.length > 0 && (
             <div className="text-sm">
               <div className="label">Obsadené termíny</div>
               <div className="flex flex-wrap gap-2">
-                {item.blockedRanges.map((r) => <span key={r.start} className="badge badge-warn">{formatDate(r.start)} – {formatDate(r.end)}</span>)}
+                {item.blockedRanges.map((r) => (
+                  <span key={`${r.start}-${r.startTime}`} className="badge badge-warn">
+                    {formatPeriod({ rentalMode: r.mode, startDate: r.start, endDate: r.end, startTime: r.startTime, endTime: r.endTime })}
+                  </span>
+                ))}
               </div>
             </div>
           )}
@@ -143,41 +157,66 @@ export function ItemDetailPage() {
   );
 }
 
+const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+const toTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
 function RentalRequestForm({ item }: { item: ItemDetail }) {
   const { user } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
+  const modes: RentalMode[] = [...(item.hourlyRentalEnabled ? (['HOURLY'] as const) : []), ...(item.dailyRentalEnabled ? (['DAILY'] as const) : [])];
+  // The renter chooses the mode first; with a single offered mode it is preselected.
+  const [mode, setMode] = useState<RentalMode | null>(modes.length === 1 ? modes[0] : null);
   const minStart = item.availableFrom > todayIso() ? item.availableFrom : todayIso();
-  const [start, setStart] = useState(addDaysIso(minStart, 1));
-  const [end, setEnd] = useState(addDaysIso(minStart, 4));
+  const firstDay = addDaysIso(minStart, 1) <= item.availableTo ? addDaysIso(minStart, 1) : minStart;
+  const [start, setStart] = useState(firstDay);
+  const [end, setEnd] = useState(addDaysIso(firstDay, Math.max(item.minRentalDays, 3) - 1));
+  const defaultStart = Math.max(toMin(item.availableFromTime), 10 * 60);
+  const [startTime, setStartTime] = useState(toTime(Math.min(defaultStart, toMin(item.availableToTime) - item.minRentalHours * 60)));
+  const [endTime, setEndTime] = useState(
+    toTime(Math.min(toMin(item.availableToTime), Math.min(defaultStart, toMin(item.availableToTime) - item.minRentalHours * 60) + Math.max(item.minRentalHours, 2) * 60)),
+  );
   const [message, setMessage] = useState('');
   const [handover, setHandover] = useState('PERSONAL_PICKUP');
   const [rules, setRules] = useState(false);
   const [disclaimer, setDisclaimer] = useState(false);
   const [price, setPrice] = useState<Price | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoting, setQuoting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [nonce, setNonce] = useState(0);
+
+  const period = mode === 'HOURLY'
+    ? { rentalMode: mode, startDate: start, startTime, endTime }
+    : { rentalMode: 'DAILY' as const, startDate: start, endDate: end };
 
   useEffect(() => {
-    if (!start || !end) return;
+    if (!mode) return;
+    setQuoting(true);
     const t = setTimeout(async () => {
       try {
-        const res = await post<{ price: Price }>('/api/protection/quote', { itemId: item.id, startDate: start, endDate: end });
-        setPrice(res.price);
+        // Price is ALWAYS calculated by the server – the client only displays it.
+        const res = await post<{ quote: { price: Price } }>('/api/pricing/quote', { itemId: item.id, ...period });
+        setPrice(res.quote.price);
         setQuoteError(null);
       } catch (e) {
+        setPrice(null);
         setQuoteError(e instanceof ApiError ? e.message : 'Cenu sa nepodarilo vypočítať.');
+      } finally {
+        setQuoting(false);
       }
-    }, 250);
+    }, 300);
     return () => clearTimeout(t);
-  }, [start, end, item.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, start, end, startTime, endTime, item.id, nonce]);
 
   const needsDisclaimer = (price?.protectionFeeCents ?? 0) > 0;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return navigate('/login', { state: { from: `/items/${item.id}` } });
+    if (!mode) return setErrors({ mode: 'Najprv vyber, či si chceš predmet požičať na hodiny alebo na dni.' });
     const errs: Record<string, string> = {};
     if (!rules) errs.acceptRules = 'Musíš súhlasiť s pravidlami ShareOn.';
     if (needsDisclaimer && !disclaimer) errs.disclaimer = 'Potvrď, že rozumieš, že Ochrana prenájmu nie je poistenie.';
@@ -186,7 +225,7 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
     setSubmitting(true);
     try {
       const res = await post<{ rentalRequest: { id: string } }>('/api/rental-requests', {
-        itemId: item.id, startDate: start, endDate: end, message: message || null, handoverMethod: handover, acceptRules: true, acceptProtectionDisclaimer: disclaimer,
+        itemId: item.id, ...period, message: message || null, handoverMethod: handover, acceptRules: true, acceptProtectionDisclaimer: disclaimer,
       });
       toast('Žiadosť bola odoslaná majiteľovi.');
       navigate(`/requests/${res.rentalRequest.id}`);
@@ -200,38 +239,141 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
     }
   };
 
+  const unitPrice = mode === 'HOURLY' ? item.hourlyPriceCents : item.dailyPriceCents;
+
   return (
     <form id="request-form" onSubmit={submit} className="card scroll-mt-20 space-y-4 p-5" noValidate>
-      <h2 className="text-lg font-bold">Požiadať o požičanie</h2>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label htmlFor="r-start" className="label">Od</label>
-          <input id="r-start" type="date" className="input" min={minStart} max={item.availableTo} value={start} onChange={(e) => setStart(e.target.value)} required />
+      <h2 className="text-lg font-bold">Vybrať termín</h2>
+
+      <fieldset>
+        <legend className="label">Ako dlho si chceš predmet požičať?</legend>
+        <p className="mb-2 text-xs text-ink-3">Spôsob prenájmu</p>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup">
+          {modes.map((m) => {
+            const active = mode === m;
+            const p = m === 'HOURLY' ? `${formatEur(item.hourlyPriceCents!)} / hod.` : `${formatEur(item.dailyPriceCents!)} / deň`;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => { setMode(m); setErrors({}); }}
+                className={`rounded-2xl border p-3 text-left transition ${active ? 'border-transparent bg-grad-primary text-night' : 'border-line bg-night-2 text-ink hover:border-neon-blue/50'}`}
+              >
+                <span className="flex items-center gap-1.5 font-bold">
+                  {m === 'HOURLY' ? <Clock className="h-4 w-4" aria-hidden /> : <CalendarDays className="h-4 w-4" aria-hidden />}
+                  {RENTAL_MODE_LABELS[m]}
+                </span>
+                <span className={`text-sm ${active ? 'text-night/80' : 'text-ink-2'}`}>{p}</span>
+              </button>
+            );
+          })}
         </div>
-        <div>
-          <label htmlFor="r-end" className="label">Do</label>
-          <input id="r-end" type="date" className="input" min={start} max={item.availableTo} value={end} onChange={(e) => setEnd(e.target.value)} required />
+        {errors.mode && <p className="field-error">{errors.mode}</p>}
+      </fieldset>
+
+      {!mode && <p className="text-sm text-ink-3">Vyber spôsob prenájmu, potom zvolíš termín.</p>}
+
+      {mode === 'HOURLY' && (
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="r-date" className="label">Dátum</label>
+            <input id="r-date" type="date" className="input" min={minStart} max={item.availableTo} value={start} onChange={(e) => setStart(e.target.value)} required />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="r-from" className="label">Začiatok</label>
+              <input id="r-from" type="time" step={900} className="input" min={item.availableFromTime} max={item.availableToTime} value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+            </div>
+            <div>
+              <label htmlFor="r-to" className="label">Koniec</label>
+              <input id="r-to" type="time" step={900} className="input" min={item.availableFromTime} max={item.availableToTime} value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+            </div>
+          </div>
+          <p className="text-xs text-ink-3">
+            Dostupnosť {item.availableFromTime} – {item.availableToTime} · min. {hoursLabel(item.minRentalHours)}, max. {hoursLabel(item.maxRentalHours)} · v rámci jedného dňa, po 15 minútach
+          </p>
         </div>
-      </div>
-      {quoteError ? <p className="field-error" role="alert">{quoteError}</p> : price ? <PriceBreakdown {...price} isDemo={price.protection?.isDemo} /> : <Spinner label="Počítam cenu…" />}
-      {needsDisclaimer && <ProtectionNotice compact />}
-      <SelectField id="r-handover" label="Spôsob odovzdania" value={handover} onChange={(e) => setHandover(e.target.value)}>
-        {Object.entries(HANDOVER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-      </SelectField>
-      <TextArea id="r-msg" label="Správa pre majiteľa" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1000} placeholder="Na čo predmet potrebuješ, kedy ho vyzdvihneš…" error={errors.message} />
-      <Checkbox id="r-rules" checked={rules} onChange={setRules} error={errors.acceptRules}>
-        Súhlasím s <Link to="/protection" className="text-neon-blue underline">pravidlami ShareOn</Link> a zaväzujem sa predmet vrátiť v rovnakom stave.
-      </Checkbox>
-      {needsDisclaimer && (
-        <Checkbox id="r-disc" checked={disclaimer} onChange={setDisclaimer} error={errors.disclaimer}>
-          Rozumiem, že Ochrana prenájmu <strong>nie je poistenie</strong> a kompenzácia nie je automatická.
-        </Checkbox>
       )}
-      <button type="submit" className="btn btn-primary w-full" disabled={submitting || !price}>
-        {submitting ? 'Odosielam…' : user ? 'Odoslať žiadosť' : 'Prihlás sa a požiadaj'}
-      </button>
-      <p className="text-xs text-ink-3">Kontaktné údaje sa zobrazia až po prijatí žiadosti. Platby a záloha sú v MVP simulované.</p>
+
+      {mode === 'DAILY' && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="r-start" className="label">Začiatok</label>
+              <input id="r-start" type="date" className="input" min={minStart} max={item.availableTo} value={start} onChange={(e) => { setStart(e.target.value); if (end < e.target.value) setEnd(e.target.value); }} required />
+            </div>
+            <div>
+              <label htmlFor="r-end" className="label">Koniec</label>
+              <input id="r-end" type="date" className="input" min={start} max={item.availableTo} value={end} onChange={(e) => setEnd(e.target.value)} required />
+            </div>
+          </div>
+          <p className="text-xs text-ink-3">{DAILY_RULE_TEXT} Min. {daysLabel(item.minRentalDays)}, max. {daysLabel(item.maxRentalDays)}.</p>
+        </div>
+      )}
+
+      {mode && (
+        <>
+          <div className="card-elevated space-y-1 p-4 text-sm" aria-live="polite">
+            {mode === 'HOURLY' ? (
+              <>
+                <SummaryRow k="Dátum" v={formatDayLong(start)} />
+                <SummaryRow k="Čas" v={`${startTime} – ${endTime}`} />
+              </>
+            ) : (
+              <SummaryRow k="Dátum" v={formatDateRangeLong(start, end)} />
+            )}
+            {price && (
+              <>
+                <SummaryRow k="Trvanie" v={mode === 'HOURLY' ? hoursLabel(price.units) : daysLabel(price.units)} />
+                <SummaryRow k={mode === 'HOURLY' ? 'Počet hodín' : 'Počet dní'} v={price.units.toLocaleString('sk-SK')} />
+                <SummaryRow k={mode === 'HOURLY' ? 'Cena za hodinu' : 'Cena za deň'} v={unitPrice ? formatEur(unitPrice) : '–'} />
+              </>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-ink-2">Cena</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNonce((n) => n + 1)} disabled={quoting}>
+              <RefreshCw className={`h-4 w-4 ${quoting ? 'animate-spin' : ''}`} aria-hidden />Prepočítať cenu
+            </button>
+          </div>
+          {quoteError ? (
+            <p className="notice notice-warn" role="alert">{quoteError}</p>
+          ) : price ? (
+            <PriceBreakdown {...price} isDemo={price.protection?.isDemo} />
+          ) : (
+            <Spinner label="Počítam cenu…" />
+          )}
+          {needsDisclaimer && <ProtectionNotice compact />}
+          <SelectField id="r-handover" label="Spôsob odovzdania" value={handover} onChange={(e) => setHandover(e.target.value)}>
+            {Object.entries(HANDOVER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </SelectField>
+          <TextArea id="r-msg" label="Správa pre majiteľa" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1000} placeholder="Na čo predmet potrebuješ, kedy ho vyzdvihneš…" error={errors.message} />
+          <Checkbox id="r-rules" checked={rules} onChange={setRules} error={errors.acceptRules}>
+            Súhlasím s <Link to="/protection" className="text-neon-blue underline">pravidlami ShareOn</Link> a zaväzujem sa predmet vrátiť včas a v rovnakom stave.
+          </Checkbox>
+          {needsDisclaimer && (
+            <Checkbox id="r-disc" checked={disclaimer} onChange={setDisclaimer} error={errors.disclaimer}>
+              Rozumiem, že Ochrana prenájmu <strong>nie je poistenie</strong> a kompenzácia nie je automatická.
+            </Checkbox>
+          )}
+          <button type="submit" className="btn btn-primary w-full" disabled={submitting || !price || quoting}>
+            {submitting ? 'Odosielam…' : user ? 'Požiadať o prenájom' : 'Prihlás sa a požiadaj o prenájom'}
+          </button>
+        </>
+      )}
+      <p className="text-xs text-ink-3">Kontaktné údaje sa zobrazia až po prijatí žiadosti. Platby a kaucia sú v MVP simulované. Časy sú v časovom pásme Bratislava.</p>
     </form>
+  );
+}
+
+function SummaryRow({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-ink-3">{k}</span>
+      <span className="text-right font-semibold">{v}</span>
+    </div>
   );
 }
 

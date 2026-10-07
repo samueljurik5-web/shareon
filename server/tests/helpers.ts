@@ -4,7 +4,8 @@ import type { Category, Role } from '@prisma/client';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
 import { signToken } from '../src/middleware/auth.js';
-import { addDays, todayUtc, toDateOnlyString } from '../src/lib/dates.js';
+import { addDays, todayUtc } from '../src/lib/dates.js';
+import { addDaysToDate, todayLocal } from '../src/lib/time.js';
 
 export const app = createApp();
 export const api = () => request(app);
@@ -33,21 +34,51 @@ export const createUser = async (overrides: { role?: Role; name?: string } = {})
   return { user, token: signToken(user), auth: { Authorization: `Bearer ${signToken(user)}` } };
 };
 
-export const day = (offset: number) => toDateOnlyString(addDays(todayUtc(), offset));
+/** Local (Europe/Bratislava) date string `offset` days from today. */
+export const day = (offset: number) => addDaysToDate(todayLocal(), offset);
+
+export const hourlyBody = (itemId: string, dayOffset: number, startTime: string, endTime: string) => ({
+  itemId,
+  rentalMode: 'HOURLY',
+  startDate: day(dayOffset),
+  startTime,
+  endTime,
+  message: 'Potrebujem to na pár hodín.',
+  handoverMethod: 'PERSONAL_PICKUP',
+  acceptRules: true,
+  acceptProtectionDisclaimer: true,
+});
 
 export const createItem = async (
   ownerId: string,
-  overrides: Partial<{ pricePerDayCents: number; replacementValueCents: number; category: Category; protectionEligible: boolean }> = {},
+  overrides: Partial<{
+    dailyPriceCents: number | null;
+    hourlyPriceCents: number | null;
+    dailyRentalEnabled: boolean;
+    hourlyRentalEnabled: boolean;
+    replacementValueCents: number;
+    category: Category;
+    protectionEligible: boolean;
+    minRentalHours: number;
+    maxRentalHours: number;
+    minRentalDays: number;
+    maxRentalDays: number;
+    availableFromTime: string;
+    availableToTime: string;
+    bufferHours: number;
+  }> = {},
 ) =>
   prisma.item.create({
     data: {
       ownerId,
       title: 'Testovacia kosačka',
-      category: overrides.category ?? 'GARDEN',
+      category: 'GARDEN',
       description: 'Testovací predmet s dostatočne dlhým popisom.',
-      pricePerDayCents: overrides.pricePerDayCents ?? 800,
-      replacementValueCents: overrides.replacementValueCents ?? 10000,
-      protectionEligible: overrides.protectionEligible ?? true,
+      replacementValueCents: 10000,
+      protectionEligible: true,
+      dailyRentalEnabled: true,
+      dailyPriceCents: 800,
+      ...overrides,
       city: 'Košice',
       condition: 'GOOD',
       availableFrom: addDays(todayUtc(), -10),
@@ -57,8 +88,10 @@ export const createItem = async (
     },
   });
 
-export const requestBody = (itemId: string, start = 5, end = 8) => ({
+/** Daily request; days are inclusive, so (5, 7) = 3 days. */
+export const requestBody = (itemId: string, start = 5, end = 7) => ({
   itemId,
+  rentalMode: 'DAILY',
   startDate: day(start),
   endDate: day(end),
   message: 'Dobrý deň, rád by som si predmet požičal.',

@@ -1,36 +1,50 @@
 import type { Category } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { badRequest } from '../lib/errors.js';
 import type { AppSettings } from './settings.js';
 import { getProtectionProvider, isProtectionAvailableFor } from './protection/index.js';
-import type { ProtectionQuote, RiskSignals } from './protection/index.js';
-import { rentalDays as countDays } from '../lib/dates.js';
+import type { ProtectionQuote, RentalDuration, RiskSignals } from './protection/index.js';
 
 export interface PricingItem {
-  pricePerDayCents: number;
+  dailyPriceCents: number | null;
+  hourlyPriceCents: number | null;
   replacementValueCents: number;
   category: Category;
   protectionEligible: boolean;
 }
 
+/**
+ * Complete server-side price breakdown. All amounts are integer cents (EUR).
+ * Clients may display it but never send any of these values back as truth.
+ */
 export interface PriceBreakdown {
-  rentalDays: number;
-  pricePerDayCents: number;
-  /** Non-refundable rental price */
+  rentalMode: 'DAILY' | 'HOURLY';
+  /** Hourly rentals: exact minutes; daily: null */
+  durationMinutes: number | null;
+  /** Daily rentals: inclusive day count; hourly: null */
+  durationDays: number | null;
+  /** Billing quantity: hours (may be fractional, e.g. 1.5) or days */
+  units: number;
+  unit: 'HOUR' | 'DAY';
+  pricePerUnitCents: number;
+  /** Non-refundable rental price = units × pricePerUnit */
   rentalPriceCents: number;
-  /** Non-refundable protection fee (not insurance) */
+  /** Non-refundable protection fee (NOT insurance) */
   protectionFeeCents: number;
   /** Refundable deposit (simulated in MVP) */
   depositCents: number;
   /** Platform fee – 0 unless enabled in settings */
   platformFeeCents: number;
   totalCents: number;
+  /** Returned to the renter when nothing is withheld (= deposit) */
+  refundableCents: number;
   currency: 'EUR';
   protectionMode: AppSettings['protectionMode'];
   protectionAvailable: boolean;
   protection: ProtectionQuote | null;
 }
 
-/** Deposit = depositPercentage × replacement value, rounded to whole euros, capped. */
+/** Deposit = depositPercentage × replacement value, rounded to whole euros, capped. Same for both modes. */
 export const calculateDeposit = (replacementValueCents: number, settings: AppSettings): number => {
   const raw = Math.round((replacementValueCents * settings.depositPercentage) / 100) * 100;
   return Math.max(0, Math.min(raw, settings.maxDepositCents));
@@ -73,34 +87,33 @@ export const loadRiskSignals = async (renterId: string | null, ownerId: string |
 };
 
 /**
- * Single source of truth for all money amounts. Always called on the server;
- * values sent by clients are never used.
+ * THE single source of truth for rental money amounts (hourly and daily).
+ *   hourly: rentalPrice = totalHours × pricePerHour   (computed from minutes, rounded to cents)
+ *   daily:  rentalPrice = totalDays × pricePerDay      (inclusive day rule)
  */
-export const calculatePrice = async (
+export const calculateRentalPrice = async (
   item: PricingItem,
-  start: Date,
-  end: Date,
+  duration: RentalDuration,
   settings: AppSettings,
   riskSignals: RiskSignals = emptyRiskSignals,
 ): Promise<PriceBreakdown> => {
-  const days = countDays(start, end);
-  return calculatePriceForDays(item, days, settings, riskSignals);
-};
+  const hourly = duration.mode === 'HOURLY';
+  const pricePerUnitCents = hourly ? item.hourlyPriceCents : item.dailyPriceCents;
+  if (!pricePerUnitCents || pricePerUnitCents <= 0) {
+    throw badRequest(hourly ? 'Predmet nemá nastavenú cenu za hodinu.' : 'Predmet nemá nastavenú cenu za deň.');
+  }
+  const units = hourly ? duration.minutes / 60 : duration.days;
+  const rentalPriceCents = hourly
+    ? Math.round((duration.minutes * pricePerUnitCents) / 60)
+    : duration.days * pricePerUnitCents;
 
-export const calculatePriceForDays = async (
-  item: PricingItem,
-  days: number,
-  settings: AppSettings,
-  riskSignals: RiskSignals = emptyRiskSignals,
-): Promise<PriceBreakdown> => {
-  const rentalPriceCents = days * item.pricePerDayCents;
   const protectionAvailable = isProtectionAvailableFor(settings, item);
   let protection: ProtectionQuote | null = null;
   if (protectionAvailable) {
     protection = await getProtectionProvider(settings).getQuote({
       replacementValueCents: item.replacementValueCents,
       category: item.category,
-      rentalDays: days,
+      duration,
       riskSignals,
     });
   }
@@ -108,16 +121,25 @@ export const calculatePriceForDays = async (
   const depositCents = calculateDeposit(item.replacementValueCents, settings);
   const platformFeeCents = calculatePlatformFee(rentalPriceCents, settings);
   return {
-    rentalDays: days,
-    pricePerDayCents: item.pricePerDayCents,
+    rentalMode: duration.mode,
+    durationMinutes: hourly ? duration.minutes : null,
+    durationDays: hourly ? null : duration.days,
+    units,
+    unit: hourly ? 'HOUR' : 'DAY',
+    pricePerUnitCents,
     rentalPriceCents,
     protectionFeeCents,
     depositCents,
     platformFeeCents,
     totalCents: rentalPriceCents + protectionFeeCents + depositCents + platformFeeCents,
+    refundableCents: depositCents,
     currency: 'EUR',
     protectionMode: protectionAvailable ? settings.protectionMode : 'NONE',
     protectionAvailable: Boolean(protection?.available),
     protection,
   };
 };
+
+/** Convenience for estimates (item detail, seed): daily price for N days. */
+export const calculatePriceForDays = (item: PricingItem, days: number, settings: AppSettings, risk?: RiskSignals) =>
+  calculateRentalPrice(item, { mode: 'DAILY', days }, settings, risk);

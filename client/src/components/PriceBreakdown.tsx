@@ -1,24 +1,39 @@
-import { formatEur } from '../lib/format';
+import type { RentalMode } from '../api/types';
+import { formatEur, hoursLabel } from '../lib/format';
 
-interface Props {
-  rentalDays: number;
-  pricePerDayCents: number;
+export interface PriceBreakdownProps {
+  rentalMode: RentalMode;
+  /** hours (may be fractional) or days */
+  units: number;
+  pricePerUnitCents: number;
   rentalPriceCents: number;
   protectionFeeCents: number;
   depositCents: number;
   platformFeeCents: number;
   totalCents: number;
+  refundableCents?: number;
   isDemo?: boolean;
   simulated?: boolean;
 }
 
-/** Visually separates non-refundable rental price, protection fee, refundable deposit and platform fee. */
-export function PriceBreakdown(p: Props) {
+const unitsText = (mode: RentalMode, units: number) =>
+  mode === 'HOURLY' ? (Number.isInteger(units) ? String(units) : hoursLabel(units).split(' ')[0]) : String(units);
+
+/**
+ * Server-calculated amounts only. Visually separates the non-refundable rental price,
+ * protection fee (not insurance) and platform fee from the refundable deposit.
+ */
+export function PriceBreakdown(p: PriceBreakdownProps) {
+  const unit = p.rentalMode === 'HOURLY' ? 'hod.' : p.units === 1 ? 'deň' : 'dni';
   return (
     <div className="space-y-3" data-testid="price-breakdown">
       <div className="card-elevated p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Nevratné</div>
-        <Row label={`Prenájom: ${p.rentalDays} ${dayWord(p.rentalDays)} × ${formatEur(p.pricePerDayCents)}`} value={formatEur(p.rentalPriceCents)} />
+        <Row
+          label="Cena prenájmu"
+          hint={`${unitsText(p.rentalMode, p.units)} ${unit} × ${formatEur(p.pricePerUnitCents)} = ${formatEur(p.rentalPriceCents)}`}
+          value={formatEur(p.rentalPriceCents)}
+        />
         {p.protectionFeeCents > 0 && (
           <Row
             label={
@@ -27,32 +42,33 @@ export function PriceBreakdown(p: Props) {
               </>
             }
             value={formatEur(p.protectionFeeCents)}
-            hint="Nie je poistenie."
+            hint="Nie je poistenie. Kompenzácia nie je automatická."
           />
         )}
-        {p.platformFeeCents > 0 && <Row label="Poplatok platformy" value={formatEur(p.platformFeeCents)} />}
+        <Row label="Platformový poplatok" value={formatEur(p.platformFeeCents)} hint={p.platformFeeCents === 0 ? 'Počas MVP bez poplatku.' : undefined} />
       </div>
       <div className="card-elevated border-neon-green/25 p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-neon-green">Vratné</div>
         <Row
           label={
             <>
-              Vratná záloha {p.simulated !== false && <span className="badge ml-1">SIMULATED PAYMENT</span>}
+              Vratná kaucia {p.simulated !== false && <span className="badge ml-1">SIMULATED PAYMENT</span>}
             </>
           }
           value={formatEur(p.depositCents)}
-          hint="Vráti sa po riadnom vrátení predmetu."
+          hint="Vráti sa po riadnom vrátení predmetu, ak nie je zadržaná v spore."
         />
       </div>
       <div className="flex items-center justify-between px-1 pt-1">
-        <span className="font-semibold text-ink-2">Odhadovaná suma spolu</span>
+        <span className="font-semibold text-ink-2">Odhad spolu</span>
         <span className="text-xl font-extrabold">{formatEur(p.totalCents)}</span>
       </div>
+      {p.refundableCents != null && p.refundableCents > 0 && (
+        <p className="px-1 text-xs text-ink-3">Z toho vratné: {formatEur(p.refundableCents)}</p>
+      )}
     </div>
   );
 }
-
-const dayWord = (n: number) => (n === 1 ? 'deň' : n >= 2 && n <= 4 ? 'dni' : 'dní');
 
 function Row({ label, value, hint }: { label: React.ReactNode; value: string; hint?: string }) {
   return (

@@ -3,7 +3,7 @@ import { get } from '../api/client';
 import type { RentalListEntry } from '../api/types';
 import { useAsync } from '../lib/useAsync';
 import { EmptyState, ErrorState, Spinner } from '../components/States';
-import { EMPTY, formatDate, formatEur, imageUrl, RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS } from '../lib/format';
+import { EMPTY, formatDuration, formatEur, formatPeriod, imageUrl, RENTAL_MODE_LABELS, RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
 
 export function RequestsPage() {
@@ -36,7 +36,10 @@ export function RequestsPage() {
                       {r.status === 'COMPLETED' && !reviewedByMe && <span className="badge badge-demo">Ohodnoť</span>}
                     </div>
                     <div className="mt-1 truncate font-bold">{r.item.title}</div>
-                    <div className="text-xs text-ink-2">{formatDate(r.startDate)} – {formatDate(r.endDate)} · {tab === 'sent' ? 'Majiteľ' : 'Nájomca'}: {other.name}</div>
+                    <div className="text-xs text-ink-2">
+                      <span className="font-semibold text-neon-blue">{RENTAL_MODE_LABELS[r.rentalMode]}</span> · {formatPeriod(r)} · {formatDuration(r)}
+                    </div>
+                    <div className="text-xs text-ink-3">{tab === 'sent' ? 'Majiteľ' : 'Nájomca'}: {other.name}</div>
                   </div>
                   <div className="shrink-0 text-right font-extrabold">{formatEur(r.totalCents)}</div>
                 </Link>

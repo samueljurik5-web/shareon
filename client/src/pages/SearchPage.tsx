@@ -9,7 +9,7 @@ import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import { useAsync } from '../lib/useAsync';
 import { CONDITION_LABELS, EMPTY } from '../lib/format';
 
-const FILTER_KEYS = ['q', 'category', 'city', 'minPrice', 'maxPrice', 'condition', 'from', 'to', 'protection', 'sort'];
+const FILTER_KEYS = ['q', 'category', 'city', 'mode', 'minPrice', 'maxPrice', 'condition', 'from', 'to', 'protection', 'sort'];
 
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -47,9 +47,17 @@ export function SearchPage() {
             <label className="label" htmlFor="f-city">Mesto</label>
             <input id="f-city" className="input" value={params.get('city') ?? ''} onChange={(e) => set('city', e.target.value)} placeholder="Košice" />
           </div>
+          <div>
+            <label className="label" htmlFor="f-mode">Spôsob prenájmu</label>
+            <select id="f-mode" className="input" value={params.get('mode') ?? ''} onChange={(e) => set('mode', e.target.value)}>
+              <option value="">Na hodiny aj na dni</option>
+              <option value="HOURLY">Na hodiny</option>
+              <option value="DAILY">Na dni</option>
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="label" htmlFor="f-min">Cena od (€/deň)</label>
+              <label className="label" htmlFor="f-min">{params.get('mode') === 'HOURLY' ? 'Cena od (€/hod.)' : 'Cena od (€/deň)'}</label>
               <input id="f-min" className="input" type="number" min={0} inputMode="decimal" value={params.get('minPrice') ?? ''} onChange={(e) => set('minPrice', e.target.value)} />
             </div>
             <div>

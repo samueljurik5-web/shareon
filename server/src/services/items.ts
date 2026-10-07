@@ -4,7 +4,7 @@ import { getSettings } from './settings.js';
 import { isProtectionAvailableFor } from './protection/index.js';
 import { itemRatingsMap, userRatingsMap } from './stats.js';
 
-export const BLOCKING_RENTAL_STATUSES = ['ACCEPTED', 'ACTIVE', 'RETURN_PENDING', 'RETURNED', 'DISPUTED'] as const;
+export { BLOCKING_RENTAL_STATUSES } from './availability.js';
 
 type ItemWithRelations = Item & { images: ItemImage[]; owner: Pick<User, 'id' | 'name' | 'city' | 'avatarUrl'> };
 
@@ -29,7 +29,10 @@ export const serializeItems = async (items: ItemWithRelations[], viewerId?: stri
     title: i.title,
     category: i.category,
     description: i.description,
-    pricePerDayCents: i.pricePerDayCents,
+    dailyPriceCents: i.dailyRentalEnabled ? i.dailyPriceCents : null,
+    hourlyPriceCents: i.hourlyRentalEnabled ? i.hourlyPriceCents : null,
+    dailyRentalEnabled: i.dailyRentalEnabled,
+    hourlyRentalEnabled: i.hourlyRentalEnabled,
     city: i.city,
     condition: i.condition,
     availableFrom: i.availableFrom,

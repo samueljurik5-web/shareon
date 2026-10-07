@@ -12,11 +12,11 @@ export const todayUtc = (): Date => {
 };
 
 /**
- * Number of billed rental days. A rental from 1.10. to 4.10. is 3 days; a same-day
- * rental counts as 1 day.
+ * Number of billed rental days – INCLUSIVE rule used everywhere in ShareOn:
+ * a rental from 12.10. to 14.10. is 3 days; a same-day rental is 1 day.
  */
 export const rentalDays = (start: Date, end: Date): number =>
-  Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_MS));
+  Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1);
 
 export const addDays = (date: Date, days: number): Date => new Date(date.getTime() + days * DAY_MS);
 
