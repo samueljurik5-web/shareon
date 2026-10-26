@@ -14,8 +14,8 @@ const MAX_STAGGER_MS = 240;
 /** Card badges: availability today + rental mode ("Na hodiny" when hourly is possible, else "Na dni"). */
 const badgesFor = (item: Item) => {
   const out: { label: string; className: string }[] = [];
-  if (item.availableToday) out.push({ label: 'Dostupné dnes', className: 'badge-teal' });
-  out.push(item.hourlyRentalEnabled ? { label: 'Na hodiny', className: 'badge-info' } : { label: 'Na dni', className: '' });
+  if (item.availableToday) out.push({ label: 'Dostupné dnes', className: 'badge-info' });
+  out.push(item.hourlyRentalEnabled ? { label: 'Na hodiny', className: '' } : { label: 'Na dni', className: '' });
   return out;
 };
 
@@ -28,7 +28,7 @@ function CardRating({ item }: { item: Item }) {
   const what = own ? 'Hodnotenie predmetu' : 'Hodnotenie majiteľa';
   return (
     <span className="inline-flex items-center gap-1 text-xs font-bold text-ink" title={`${what}: ${value} z 5 (${r.count})`}>
-      <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" aria-hidden />
+      <Star className="h-3.5 w-3.5 fill-neon-pink text-neon-pink" aria-hidden />
       <span className="sr-only">{what}: </span>
       {value}
     </span>
@@ -92,16 +92,16 @@ export function ItemCard({ item, index = 0, featured = false, className = '' }: 
         <h3 className={`line-clamp-2 font-bold leading-snug ${featured ? 'text-lg md:text-base' : 'text-sm sm:text-base'}`}>
           <Link to={`/items/${item.id}`} className="hover:underline">{item.title}</Link>
         </h3>
-        {price && <div className={`text-gradient-teal font-extrabold ${featured ? 'text-xl md:text-lg' : 'text-base sm:text-lg'}`}>{price}</div>}
+        {price && <div className={`text-gradient font-extrabold ${featured ? 'text-xl md:text-lg' : 'text-base sm:text-lg'}`}>{price}</div>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
           {item.distanceKm != null ? (
             <span className="inline-flex items-center gap-1" title={`Orientačná vzdialenosť od centra Košíc${item.district ? ` (${item.district})` : ''}`}>
-              <MapPin className="h-3 w-3 text-teal" aria-hidden />
+              <MapPin className="h-3 w-3" aria-hidden />
               {formatKm(item.distanceKm)}
               <span className="sr-only"> od centra Košíc</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3 text-teal" aria-hidden />{item.city}</span>
+            <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden />{item.city}</span>
           )}
           <CardRating item={item} />
         </div>

@@ -70,7 +70,7 @@ export function HomePage() {
       <div className="space-y-3 sm:space-y-4">
         <form onSubmit={onSearch} role="search" className="relative">
           <label htmlFor="home-search" className="sr-only">Čo si chceš požičať?</label>
-          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-teal" aria-hidden />
+          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-3" aria-hidden />
           <input
             id="home-search"
             type="search"
@@ -80,14 +80,14 @@ export function HomePage() {
             className="input h-14 rounded-full pr-28 text-base sm:h-16 sm:text-lg"
             style={{ paddingLeft: '3.25rem' }}
           />
-          <button type="submit" className="btn btn-teal btn-sm absolute right-2 top-1/2 -translate-y-1/2 sm:right-2.5">Hľadať</button>
+          <button type="submit" className="btn btn-primary btn-sm absolute right-2 top-1/2 -translate-y-1/2 sm:right-2.5">Hľadať</button>
         </form>
 
         <div className="h-scroll" role="group" aria-label="Rýchle filtre">
           {QUICK_FILTERS.map((f) => {
             const active = sameSet(f.categories, selected);
             return (
-              <button key={f.label} type="button" className={`chip chip-teal ${active ? 'chip-active' : ''}`} aria-pressed={active} onClick={() => select(f.categories)}>
+              <button key={f.label} type="button" className={`chip ${active ? 'chip-active' : ''}`} aria-pressed={active} onClick={() => select(f.categories)}>
                 {f.label}
               </button>
             );
@@ -103,9 +103,9 @@ export function HomePage() {
                 type="button"
                 onClick={() => select(active ? [] : [category])}
                 aria-pressed={active}
-                className={`group flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl border px-1 py-2 text-xs md:gap-1.5 md:py-2.5 font-semibold transition-colors duration-200 ease-out md:w-auto ${active ? 'border-teal/50 bg-teal/10 text-ink' : 'border-line bg-card text-ink-2 hover:bg-elevated hover:text-ink'}`}
+                className={`group flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-2xl border px-1 py-2 text-xs md:gap-1.5 md:py-2.5 font-semibold transition-colors duration-200 ease-out md:w-auto ${active ? 'border-neon-purple/50 bg-neon-purple/10 text-ink' : 'border-line bg-card text-ink-2 hover:bg-elevated hover:text-ink'}`}
               >
-                <span className={`grid h-8 w-8 place-items-center rounded-full md:h-10 md:w-10 transition-colors duration-200 ${active ? 'bg-grad-teal text-night' : 'bg-night-2 text-teal group-hover:text-emerald'}`}>
+                <span className={`grid h-8 w-8 place-items-center rounded-full md:h-10 md:w-10 transition-colors duration-200 ${active ? 'bg-grad-primary text-night' : 'bg-night-2 text-neon-blue group-hover:text-neon-pink'}`}>
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
                 {label}
@@ -116,11 +116,11 @@ export function HomePage() {
       </div>
 
       <section aria-labelledby="rent-heading">
-        <h1 id="rent-heading" className="text-gradient-teal text-[1.4rem] font-extrabold leading-tight tracking-tight sm:text-3xl">Požičaj si v svojom okolí</h1>
+        <h1 id="rent-heading" className="text-gradient text-[1.4rem] font-extrabold leading-tight tracking-tight sm:text-3xl">Požičaj si v svojom okolí</h1>
         <div className="mb-3 mt-1 flex items-baseline justify-between gap-3 sm:mb-4">
           <p className="text-sm text-ink-2 sm:text-base">Dostupné veci od ľudí v Košiciach</p>
           {items.length > 0 && (
-            <Link to={`/search${selected.length ? `?category=${selected.join(',')}` : ''}`} className="shrink-0 text-sm font-semibold text-teal hover:underline">
+            <Link to={`/search${selected.length ? `?category=${selected.join(',')}` : ''}`} className="shrink-0 text-sm font-semibold text-neon-blue hover:underline">
               Zobraziť všetko
             </Link>
           )}
@@ -147,7 +147,7 @@ export function HomePage() {
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 {selected.length > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => select([])}>Zobraziť všetko</button>}
-                <Link className="btn btn-teal btn-sm" to="/items/new">Pridať vec na prenájom</Link>
+                <Link className="btn btn-primary btn-sm" to="/items/new">Pridať vec na prenájom</Link>
               </div>
             }
           />
@@ -156,26 +156,26 @@ export function HomePage() {
 
       {popular.data && popular.data.items.length > 0 && <PopularRow items={popular.data.items} />}
 
-      <section className="relative overflow-hidden rounded-[28px] border border-teal/25 bg-night-2 p-6 sm:p-10">
-        <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-teal/20 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-28 -left-10 h-64 w-64 rounded-full bg-emerald/15 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[28px] border border-line bg-night-2 p-6 sm:p-10">
+        <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-neon-purple/25 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-28 -left-10 h-64 w-64 rounded-full bg-neon-blue/20 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-grad-teal text-night">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-grad-primary text-night">
               <Clock className="h-6 w-6" aria-hidden />
             </span>
             <div>
-              <h2 className="text-gradient-teal text-2xl font-extrabold sm:text-3xl">Potrebuješ to len na pár hodín?</h2>
+              <h2 className="text-gradient text-2xl font-extrabold sm:text-3xl">Potrebuješ to len na pár hodín?</h2>
               <p className="mt-2 max-w-xl text-ink-2">Vyber deň, čas a požičaj si vec bez dlhého prenájmu.</p>
             </div>
           </div>
-          <Link to="/search?mode=HOURLY" className="btn btn-teal shrink-0 self-start sm:self-auto">Nájdi vec na hodiny</Link>
+          <Link to="/search?mode=HOURLY" className="btn btn-primary shrink-0 self-start sm:self-auto">Nájdi vec na hodiny</Link>
         </div>
       </section>
 
       <section className="card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
         <div className="flex items-start gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-elevated text-teal">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-elevated text-neon-blue">
             <PackagePlus className="h-6 w-6" aria-hidden />
           </span>
           <div>
@@ -197,7 +197,7 @@ function PopularRow({ items }: { items: Item[] }) {
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
           <h2 id="popular-heading" className="flex items-center gap-2 text-xl font-extrabold sm:text-2xl">
-            <Flame className="h-5 w-5 text-teal" aria-hidden />Populárne teraz
+            <Flame className="h-5 w-5 text-neon-pink" aria-hidden />Populárne teraz
           </h2>
           <p className="mt-1 text-sm text-ink-2">Najčastejšie požičiavané a nové veci</p>
         </div>
