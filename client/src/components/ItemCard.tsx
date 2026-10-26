@@ -8,7 +8,11 @@ import { del, post } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 
-export function ItemCard({ item }: { item: Item }) {
+/** Stagger for cards in one visible group – capped so large lists never make the user wait. */
+const STAGGER_MS = 40;
+const MAX_STAGGER_MS = 240;
+
+export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
   const { user } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
@@ -28,10 +32,13 @@ export function ItemCard({ item }: { item: Item }) {
   };
 
   return (
-    <article className="card group flex flex-col overflow-hidden p-0">
+    <article
+      className="card card-interactive animate-fade-up group flex flex-col overflow-hidden p-0"
+      style={{ animationDelay: `${Math.min(index * STAGGER_MS, MAX_STAGGER_MS)}ms` }}
+    >
       <div className="relative">
         <Link to={`/items/${item.id}`} tabIndex={-1} aria-hidden>
-          <img src={imageUrl(item.images[0]?.url)} alt="" className="aspect-[4/3] w-full object-cover transition duration-300 group-hover:scale-[1.02]" loading="lazy" />
+          <img src={imageUrl(item.images[0]?.url)} alt="" className="card-media aspect-[4/3] w-full object-cover" loading="lazy" />
         </Link>
         <button
           onClick={toggleFav}
@@ -39,7 +46,7 @@ export function ItemCard({ item }: { item: Item }) {
           aria-label={fav ? 'Odstrániť z obľúbených' : 'Pridať do obľúbených'}
           aria-pressed={fav}
         >
-          <Heart className={`h-4 w-4 ${fav ? 'fill-neon-pink text-neon-pink' : 'text-ink'}`} aria-hidden />
+          <Heart className={`h-4 w-4 transition-colors duration-200 ${fav ? 'animate-icon-pop fill-neon-pink text-neon-pink' : 'text-ink'}`} aria-hidden />
         </button>
         {item.protectionAvailable && (
           <span className="badge badge-protect absolute left-2 top-2 bg-night/80 backdrop-blur">
@@ -78,8 +85,8 @@ export function ItemCard({ item }: { item: Item }) {
 export function ItemGrid({ items }: { items: Item[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-      {items.map((i) => (
-        <ItemCard key={i.id} item={i} />
+      {items.map((i, idx) => (
+        <ItemCard key={i.id} item={i} index={idx} />
       ))}
     </div>
   );

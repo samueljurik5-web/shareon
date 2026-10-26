@@ -13,6 +13,7 @@ import { PhotoUploader } from '../components/PhotoUploader';
 import { RatingInput } from '../components/Rating';
 import { Avatar } from '../components/Avatar';
 import { SelectField, TextArea, TextField } from '../components/Field';
+import { Modal } from '../components/Modal';
 import {
   DAILY_RULE_TEXT, DAMAGE_DISCLAIMER, DEPOSIT_STATUS_LABELS, formatDateTime, formatDayLong, formatDuration, formatEur, formatPeriod, HANDOVER_LABELS, imageUrl,
   RENTAL_MODE_TITLES, RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS,
@@ -371,8 +372,9 @@ function ReportModal({ rentalId, maxCents, defaultType, onClose }: { rentalId: s
     }
   };
   return (
-    <div className="fixed inset-0 z-[65] flex items-end justify-center overflow-y-auto bg-black/60 p-4 sm:items-center" onClick={onClose}>
-      <form role="dialog" aria-modal="true" aria-label="Nahlásiť problém" onSubmit={submit} className="card my-auto w-full max-w-lg space-y-4 p-6" onClick={(e) => e.stopPropagation()}>
+    <Modal label="Nahlásiť problém" onClose={onClose} className="max-w-lg p-6">
+      {(close) => (
+      <form onSubmit={submit} className="space-y-4">
         <h2 className="text-lg font-bold">Nahlásiť problém</h2>
         <p className="notice notice-warn">{DAMAGE_DISCLAIMER}</p>
         <SelectField id="rep-type" label="Typ problému" value={type} onChange={(e) => setType(e.target.value)}>
@@ -382,11 +384,12 @@ function ReportModal({ rentalId, maxCents, defaultType, onClose }: { rentalId: s
         <TextField id="rep-amount" label="Požadovaná suma (€, nepovinné)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} error={errors.requestedAmount} hint={`Najviac ${formatEur(maxCents)} (hodnota predmetu). Nejde o automatický nárok.`} />
         <PhotoUploader value={photos} onChange={setPhotos} label="Dôkazy (fotografie)" />
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>Zrušiť</button>
+          <button type="button" className="btn btn-secondary" onClick={close}>Zrušiť</button>
           <button className="btn btn-danger" disabled={busy || description.trim().length < 20}>Odoslať hlásenie</button>
         </div>
       </form>
-    </div>
+      )}
+    </Modal>
   );
 }
 

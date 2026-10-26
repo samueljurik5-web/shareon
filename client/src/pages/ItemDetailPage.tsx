@@ -1,5 +1,5 @@
 import { CalendarDays, Clock, Flag, Heart, MapPin, Pencil, RefreshCw, ShieldCheck, Tag } from 'lucide-react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, del, get, patch, post } from '../api/client';
 import type { ItemDetail, PriceBreakdown as Price, RentalMode, Review } from '../api/types';
@@ -15,6 +15,7 @@ import { RatingDistribution, RatingInline } from '../components/Rating';
 import { ReviewList } from '../components/ReviewList';
 import { Avatar } from '../components/Avatar';
 import { Checkbox, SelectField, TextArea } from '../components/Field';
+import { Modal } from '../components/Modal';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 
@@ -383,13 +384,14 @@ function ListingReportModal({ itemId, onClose }: { itemId: string; onClose: () =
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const closeModal = useRef<() => void>(onClose);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
       await post(`/api/items/${itemId}/report`, { type, description });
       toast('Ďakujeme, nahlásenie posúdi administrátor.');
-      onClose();
+      closeModal.current();
     } catch (err) {
       setError(err instanceof ApiError ? (err.fieldErrors().description ?? err.message) : 'Chyba');
     } finally {
@@ -397,8 +399,11 @@ function ListingReportModal({ itemId, onClose }: { itemId: string; onClose: () =
     }
   };
   return (
-    <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={onClose}>
-      <form role="dialog" aria-modal="true" aria-label="Nahlásiť inzerát" onSubmit={submit} className="card w-full max-w-md space-y-4 p-6" onClick={(e) => e.stopPropagation()}>
+    <Modal label="Nahlásiť inzerát" onClose={onClose} className="max-w-md p-6">
+      {(close) => {
+        closeModal.current = close;
+        return (
+      <form onSubmit={submit} className="space-y-4">
         <h2 className="text-lg font-bold">Nahlásiť inzerát</h2>
         <SelectField id="lr-type" label="Dôvod" value={type} onChange={(e) => setType(e.target.value)}>
           <option value="ITEM_DIFFERENT_THAN_DESCRIPTION">Predmet nezodpovedá popisu</option>
@@ -407,10 +412,12 @@ function ListingReportModal({ itemId, onClose }: { itemId: string; onClose: () =
         </SelectField>
         <TextArea id="lr-desc" label="Popis" value={description} onChange={(e) => setDescription(e.target.value)} error={error} required minLength={10} />
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>Zrušiť</button>
+          <button type="button" className="btn btn-secondary" onClick={close}>Zrušiť</button>
           <button className="btn btn-primary" disabled={busy || description.trim().length < 10}>Odoslať</button>
         </div>
       </form>
-    </div>
+        );
+      }}
+    </Modal>
   );
 }

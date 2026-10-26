@@ -35,12 +35,12 @@ export function Layout() {
           </span>
           <nav aria-label="Hlavná navigácia" className="ml-2 hidden flex-1 items-center gap-0.5 lg:flex">
             {desktopLinks.map((l) => (
-              <NavLink key={l.to} to={l.to} className={({ isActive }) => `whitespace-nowrap rounded-full px-2.5 py-2 text-sm font-semibold transition ${isActive ? 'bg-card text-ink' : 'text-ink-2 hover:text-ink'}`}>
+              <NavLink key={l.to} to={l.to} className={({ isActive }) => `whitespace-nowrap rounded-full px-2.5 py-2 text-sm font-semibold transition-colors duration-200 ease-out ${isActive ? 'bg-card text-ink' : 'text-ink-2 hover:bg-card/60 hover:text-ink'}`}>
                 {l.label}
               </NavLink>
             ))}
             {user?.role === 'ADMIN' && (
-              <NavLink to="/admin" className={({ isActive }) => `whitespace-nowrap rounded-full px-2.5 py-2 text-sm font-semibold ${isActive ? 'bg-card text-ink' : 'text-neon-pink hover:text-ink'}`}>Admin</NavLink>
+              <NavLink to="/admin" className={({ isActive }) => `whitespace-nowrap rounded-full px-2.5 py-2 text-sm font-semibold transition-colors duration-200 ease-out ${isActive ? 'bg-card text-ink' : 'text-neon-pink hover:text-ink'}`}>Admin</NavLink>
             )}
           </nav>
           <div className="ml-auto flex items-center gap-2">
@@ -68,7 +68,9 @@ export function Layout() {
 
       <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 md:pb-12">
         <ErrorBoundary resetKey={location.pathname}>
-          <Outlet />
+          <div key={location.pathname} className="animate-page">
+            <Outlet />
+          </div>
         </ErrorBoundary>
       </main>
 
@@ -98,10 +100,10 @@ function BottomNav() {
       <ul className="mx-auto grid max-w-md grid-cols-5">
         {items.map(({ to, label, icon: Icon, primary, end }) => (
           <li key={to}>
-            <NavLink to={to} end={end} className={({ isActive }) => `flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${isActive ? 'text-ink' : 'text-ink-3'}`}>
+            <NavLink to={to} end={end} className={({ isActive }) => `flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold transition-colors duration-200 ease-out ${isActive ? 'text-ink' : 'text-ink-3'}`}>
               {({ isActive }) => (
                 <>
-                  <span className={`grid place-items-center rounded-full ${primary ? 'h-10 w-10 bg-grad-primary text-night shadow-[var(--shadow-neon)]' : 'h-7 w-7'} ${isActive && !primary ? 'text-neon-blue' : ''}`}>
+                  <span className={`grid place-items-center rounded-full transition-[color,transform] duration-200 ease-out active:scale-95 ${primary ? 'h-10 w-10 bg-grad-primary text-night shadow-[var(--shadow-neon)]' : 'h-7 w-7'} ${isActive && !primary ? 'text-neon-blue' : ''}`}>
                     <Icon className="h-5 w-5" aria-hidden />
                   </span>
                   {label}
@@ -148,7 +150,7 @@ function NotificationsButton({ unread }: { unread: number }) {
         {count > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-neon-pink px-1 text-[10px] font-bold text-night">{count > 9 ? '9+' : count}</span>}
       </button>
       {open && (
-        <div className="card absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] p-2" role="dialog" aria-label="Upozornenia">
+        <div className="modal-panel card absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] p-2" role="dialog" aria-label="Upozornenia">
           <div className="flex items-center justify-between px-2 py-1">
             <span className="font-bold">Upozornenia</span>
             {count > 0 && <button className="text-xs font-semibold text-neon-blue" onClick={markAll}>Označiť ako prečítané</button>}

@@ -61,7 +61,7 @@ export function HomePage() {
       <Section title="Populárne kategórie">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {(['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE'] as Category[]).map((c) => (
-            <Link key={c} to={`/search?category=${c}`} className="card flex flex-col gap-2 p-5 transition hover:-translate-y-0.5 hover:border-neon-purple/40">
+            <Link key={c} to={`/search?category=${c}`} className="card card-interactive flex flex-col gap-2 p-5">
               <span className="text-3xl" aria-hidden>{CATEGORY_EMOJI[c]}</span>
               <span className="font-bold">{CATEGORY_LABELS[c]}</span>
             </Link>
