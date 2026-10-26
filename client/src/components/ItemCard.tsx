@@ -1,9 +1,8 @@
-import { Heart, MapPin, ShieldCheck } from 'lucide-react';
+import { Heart, MapPin, ShieldCheck, Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import type { ItemCard as Item } from '../api/types';
-import { CONDITION_LABELS, imageUrl, priceLabels } from '../lib/format';
-import { RatingInline } from './Rating';
+import { formatKm, imageUrl, priceFrom } from '../lib/format';
 import { del, post } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
@@ -12,11 +11,36 @@ import { useUi } from '../context/UiContext';
 const STAGGER_MS = 40;
 const MAX_STAGGER_MS = 240;
 
-export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
+/** Card badges: availability today + rental mode ("Na hodiny" when hourly is possible, else "Na dni"). */
+const badgesFor = (item: Item) => {
+  const out: { label: string; className: string }[] = [];
+  if (item.availableToday) out.push({ label: 'Dostupné dnes', className: 'badge-teal' });
+  out.push(item.hourlyRentalEnabled ? { label: 'Na hodiny', className: 'badge-info' } : { label: 'Na dni', className: '' });
+  return out;
+};
+
+/** Item rating when the item has reviews, otherwise the owner's rating; "Nové" without any. */
+function CardRating({ item }: { item: Item }) {
+  const own = item.rating.count > 0 ? item.rating : null;
+  const r = own ?? (item.owner.rating.count > 0 ? item.owner.rating : null);
+  if (!r || r.average == null) return <span className="text-xs text-ink-3">Nové</span>;
+  const value = r.average.toLocaleString('sk-SK', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const what = own ? 'Hodnotenie predmetu' : 'Hodnotenie majiteľa';
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-bold text-ink" title={`${what}: ${value} z 5 (${r.count})`}>
+      <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" aria-hidden />
+      <span className="sr-only">{what}: </span>
+      {value}
+    </span>
+  );
+}
+
+export function ItemCard({ item, index = 0, featured = false, className = '' }: { item: Item; index?: number; featured?: boolean; className?: string }) {
   const { user } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
   const [fav, setFav] = useState(item.isFavorite);
+  const price = priceFrom(item);
 
   const toggleFav = async () => {
     if (!user) return navigate('/login');
@@ -33,12 +57,17 @@ export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
 
   return (
     <article
-      className="card card-interactive animate-fade-up group flex flex-col overflow-hidden p-0"
+      className={`card card-interactive animate-fade-up group flex flex-col overflow-hidden p-0 ${className}`}
       style={{ animationDelay: `${Math.min(index * STAGGER_MS, MAX_STAGGER_MS)}ms` }}
     >
       <div className="relative">
         <Link to={`/items/${item.id}`} tabIndex={-1} aria-hidden>
-          <img src={imageUrl(item.images[0]?.url)} alt="" className="card-media aspect-[4/3] w-full object-cover" loading="lazy" />
+          <img
+            src={imageUrl(item.images[0]?.url)}
+            alt=""
+            className={`card-media w-full object-cover ${featured ? 'aspect-[2/1] md:aspect-[4/3]' : 'aspect-[4/3]'}`}
+            loading={index < 4 ? 'eager' : 'lazy'}
+          />
         </Link>
         <button
           onClick={toggleFav}
@@ -55,28 +84,28 @@ export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
-        <h3 className="line-clamp-2 text-sm font-bold leading-snug sm:text-base">
-          <Link to={`/items/${item.id}`} className="hover:underline">{item.title}</Link>
-        </h3>
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          {priceLabels(item).map((p, i) => (
-            <span key={p.mode} className={i === 0 ? 'text-gradient text-lg font-extrabold' : 'text-sm font-bold text-ink-2'}>
-              {p.mode === 'DAILY' && i > 0 ? `od ${p.text}` : p.text}
-            </span>
+        <div className="flex flex-wrap gap-1">
+          {badgesFor(item).map((b) => (
+            <span key={b.label} className={`badge ${b.className}`}>{b.label}</span>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-2">
-          <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden />{item.city}</span>
-          <span aria-hidden>·</span>
-          <span>{CONDITION_LABELS[item.condition]}</span>
+        <h3 className={`line-clamp-2 font-bold leading-snug ${featured ? 'text-lg md:text-base' : 'text-sm sm:text-base'}`}>
+          <Link to={`/items/${item.id}`} className="hover:underline">{item.title}</Link>
+        </h3>
+        {price && <div className={`text-gradient-teal font-extrabold ${featured ? 'text-xl md:text-lg' : 'text-base sm:text-lg'}`}>{price}</div>}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
+          {item.distanceKm != null ? (
+            <span className="inline-flex items-center gap-1" title={`Orientačná vzdialenosť od centra Košíc${item.district ? ` (${item.district})` : ''}`}>
+              <MapPin className="h-3 w-3 text-teal" aria-hidden />
+              {formatKm(item.distanceKm)}
+              <span className="sr-only"> od centra Košíc</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3 text-teal" aria-hidden />{item.city}</span>
+          )}
+          <CardRating item={item} />
         </div>
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <span className="flex items-center gap-1 truncate text-xs text-ink-3">
-            <span className="truncate">{item.owner.name.split(' ')[0]}</span>
-            <RatingInline average={item.owner.rating.average} count={item.owner.rating.count} />
-          </span>
-          <Link to={`/items/${item.id}`} className="btn btn-secondary btn-sm shrink-0" aria-label={`Detail: ${item.title}`}>Detail</Link>
-        </div>
+        <Link to={`/items/${item.id}`} className="btn btn-secondary btn-sm mt-auto w-full" aria-label={`Pozrieť: ${item.title}`}>Pozrieť</Link>
       </div>
     </article>
   );

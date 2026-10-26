@@ -8,6 +8,7 @@ import {
   TIME_RE,
   timeToMinutes,
   todayLocal,
+  zonedParts,
   zonedToUtc,
 } from '../lib/time.js';
 import type { RentalDuration } from './protection/index.js';
@@ -177,4 +178,38 @@ export const checkItemAvailability = async (
     );
   }
   return { available: true };
+};
+
+/**
+ * Card badge "Dostupné dnes": could a rental start today (Europe/Bratislava)?
+ * A quick estimate for listings – booking itself always runs checkItemAvailability.
+ * `reservations` = blocking reservations of this item around today.
+ */
+export const isAvailableToday = (
+  item: AvailabilityItem,
+  reservations: { startAt: Date; endAt: Date }[],
+  now = new Date(),
+): boolean => {
+  const today = todayLocal(now);
+  const lastDay = dateOnly(item.availableTo);
+  if (!item.isActive || today < dateOnly(item.availableFrom) || today > lastDay) return false;
+  const bufferMs = item.bufferHours * 3_600_000;
+  const isFree = (start: Date, end: Date) =>
+    !reservations.some((r) => r.startAt.getTime() < end.getTime() + bufferMs && r.endAt.getTime() > start.getTime() - bufferMs);
+
+  if (item.dailyRentalEnabled && item.dailyPriceCents) {
+    const end = addDaysToDate(today, item.minRentalDays);
+    if (addDaysToDate(today, item.minRentalDays - 1) <= lastDay && isFree(zonedToUtc(today), zonedToUtc(end))) return true;
+  }
+  if (item.hourlyRentalEnabled && item.hourlyPriceCents) {
+    const nowMin = timeToMinutes(zonedParts(now).time);
+    const minLen = item.minRentalHours * 60;
+    const first = Math.max(timeToMinutes(item.availableFromTime), Math.ceil((nowMin + 1) / HOURLY_STEP_MINUTES) * HOURLY_STEP_MINUTES);
+    const last = timeToMinutes(item.availableToTime) - minLen;
+    for (let start = first; start <= last; start += HOURLY_STEP_MINUTES) {
+      const at = (m: number) => zonedToUtc(today, `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+      if (isFree(at(start), at(start + minLen))) return true;
+    }
+  }
+  return false;
 };

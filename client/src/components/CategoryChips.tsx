@@ -1,7 +1,7 @@
 import type { Category } from '../api/types';
 import { CATEGORY_EMOJI, CATEGORY_LABELS } from '../lib/format';
 
-const ORDER: Category[] = ['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'OTHER'];
+const ORDER: Category[] = ['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'ELECTRONICS', 'HOUSEHOLD', 'OTHER'];
 
 export function CategoryChips({ value, onChange }: { value: Category | ''; onChange: (c: Category | '') => void }) {
   return (

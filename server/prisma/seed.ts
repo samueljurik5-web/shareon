@@ -5,6 +5,7 @@ import { calculateRentalPrice } from '../src/services/pricing.js';
 import { resolvePeriod } from '../src/services/availability.js';
 import { addDaysToDate, todayLocal } from '../src/lib/time.js';
 import { DEFAULT_SETTINGS } from '../src/services/settings.js';
+import { DEMO_DATA_VERSION, DEMO_OWNER_DISTRICTS } from './demo-data.js';
 
 const prisma = new PrismaClient();
 
@@ -59,9 +60,9 @@ const items: SeedItem[] = [
   { owner: 2, title: 'Horský bicykel 29" veľkosť L', category: 'SPORT', description: 'Hardtail MTB, hydraulické brzdy, 1×12 prevodovka. Prilba na požiadanie.', price: 16, value: 650, condition: 'GOOD', image: '/placeholders/sport-2.svg' },
   { owner: 3, title: 'Bežky s viazaním, veľ. 190 cm', category: 'SPORT', description: 'Klasické bežecké lyže s viazaním NNN, palice v cene. Topánky veľkosť 43.', price: 8, value: 180, condition: 'USED', image: '/placeholders/sport.svg' },
   { owner: 3, title: 'Stan pre 4 osoby', category: 'LEISURE', description: 'Rodinný stan s predsieňou, vodný stĺpec 3000 mm. Vhodný na kempovanie.', price: 9, value: 210, condition: 'VERY_GOOD', image: '/placeholders/leisure.svg' },
-  { owner: 4, title: 'Prenosný projektor + plátno', category: 'LEISURE', description: 'Full HD projektor s plátnom 100", ideálny na letné kino na záhrade.', price: 13, hourly: 5, value: 300, condition: 'GOOD', image: '/placeholders/leisure-2.svg' },
+  { owner: 4, title: 'Prenosný projektor + plátno', category: 'ELECTRONICS', description: 'Full HD projektor s plátnom 100", ideálny na letné kino na záhrade.', price: 13, hourly: 5, value: 300, condition: 'GOOD', image: '/placeholders/leisure-2.svg' },
   { owner: 4, title: 'Detský bicyklový vozík', category: 'LEISURE', description: 'Vozík za bicykel pre 2 deti, s pláštenkou a vlajočkou. Dá sa použiť aj ako kočík.', price: 10, value: 250, condition: 'GOOD', image: '/placeholders/leisure.svg' },
-  { owner: 5, title: 'Plynový gril s 3 horákmi', category: 'OTHER', description: 'Plynový gril s tromi horákmi a bočnou platňou, bez plynovej fľaše.', price: 12, value: 330, condition: 'NEW', image: '/placeholders/other.svg' },
+  { owner: 5, title: 'Plynový gril s 3 horákmi', category: 'HOUSEHOLD', description: 'Plynový gril s tromi horákmi a bočnou platňou, bez plynovej fľaše.', price: 12, value: 330, condition: 'NEW', image: '/placeholders/other.svg' },
 ];
 
 const main = async () => {
@@ -119,6 +120,7 @@ const main = async () => {
         bufferHours: x.bufferHours ?? 0,
         replacementValueCents: x.value * 100,
         city: 'Košice',
+        district: DEMO_OWNER_DISTRICTS[users[x.owner].email] ?? null,
         condition: x.condition,
         availableFrom: d(-120),
         availableTo: d(240),
@@ -347,7 +349,7 @@ const main = async () => {
     await prisma.appSetting.create({ data: { key, value } });
   }
   // A fresh seed already contains the current demo data (see upgrades in seed-if-empty.ts).
-  await prisma.appSetting.create({ data: { key: 'demoDataVersion', value: 2 } });
+  await prisma.appSetting.create({ data: { key: 'demoDataVersion', value: DEMO_DATA_VERSION } });
 
   console.info(`Done: ${u.length + 1} users, ${it.length} items, ${rentals.length} rental requests.`);
   console.info(

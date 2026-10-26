@@ -10,6 +10,7 @@ import { ErrorState, Spinner } from '../components/States';
 import { addDaysIso, CATEGORY_LABELS, CONDITION_LABELS, daysLabel, hoursLabel, todayIso } from '../lib/format';
 import { useUi } from '../context/UiContext';
 import { useAuth } from '../context/AuthContext';
+import { KOSICE_DISTRICTS } from '../lib/districts';
 
 interface FormState {
   title: string;
@@ -27,6 +28,8 @@ interface FormState {
   availableToTime: string;
   bufferHours: string;
   city: string;
+  /** optional Košice district ('' = not specified) */
+  district: string;
   condition: Condition;
   availableFrom: string;
   availableTo: string;
@@ -50,7 +53,7 @@ export function ItemFormPage() {
   const { toast } = useUi();
   const { user } = useAuth();
   const [form, setForm] = useState<FormState>({
-    title: '', category: 'GARDEN', description: '', city: user?.city ?? 'Košice', condition: 'GOOD',
+    title: '', category: 'GARDEN', description: '', city: user?.city ?? 'Košice', district: '', condition: 'GOOD',
     rentalAvailability: 'DAILY', dailyPrice: '', hourlyPrice: '', minRentalHours: '1', maxRentalHours: '8', minRentalDays: '1', maxRentalDays: '14',
     availableFromTime: '08:00', availableToTime: '20:00', bufferHours: '0',
     availableFrom: todayIso(), availableTo: addDaysIso(todayIso(), 90), replacementValue: '', serialNote: '', protectionEligible: true, images: [],
@@ -72,7 +75,7 @@ export function ItemFormPage() {
           return;
         }
         setForm({
-          title: item.title, category: item.category, description: item.description, city: item.city,
+          title: item.title, category: item.category, description: item.description, city: item.city, district: item.district ?? '',
           rentalAvailability: item.dailyRentalEnabled && item.hourlyRentalEnabled ? 'BOTH' : item.hourlyRentalEnabled ? 'HOURLY' : 'DAILY',
           dailyPrice: item.dailyPriceCents ? String(item.dailyPriceCents / 100) : '',
           hourlyPrice: item.hourlyPriceCents ? String(item.hourlyPriceCents / 100) : '',
@@ -136,6 +139,7 @@ export function ItemFormPage() {
       category: form.category,
       description: form.description,
       city: form.city,
+      district: form.district || null,
       condition: form.condition,
       availableFrom: form.availableFrom,
       availableTo: form.availableTo,
@@ -203,6 +207,11 @@ export function ItemFormPage() {
             <TextField id="availableFrom" type="date" label="Dostupné od" value={form.availableFrom} onChange={(e) => set('availableFrom', e.target.value)} error={errors.availableFrom} />
             <TextField id="availableTo" type="date" label="Dostupné do" value={form.availableTo} onChange={(e) => set('availableTo', e.target.value)} error={errors.availableTo} />
           </div>
+          <SelectField id="district" label="Mestská časť v Košiciach (nepovinné)" value={form.district} onChange={(e) => set('district', e.target.value)} error={errors.district}>
+            <option value="">Neuvádzať</option>
+            {KOSICE_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          </SelectField>
+          <p className="-mt-2 text-xs text-ink-3">Pri predmete sa zobrazí len orientačná vzdialenosť od centra Košíc – nikdy nie tvoja adresa.</p>
           <TextField id="serialNote" label="Sériové číslo alebo identifikačná poznámka (nepovinné)" value={form.serialNote} onChange={(e) => set('serialNote', e.target.value)} hint="Zobrazí sa len tebe a administrátorovi." maxLength={200} />
           <Checkbox id="protectionEligible" checked={form.protectionEligible} onChange={(v) => set('protectionEligible', v)}>
             Ponúknuť Ochranu prenájmu (ak je pre kategóriu dostupná)

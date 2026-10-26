@@ -12,16 +12,20 @@ import { toCents } from '../lib/money.js';
 import { storage } from '../services/storage/index.js';
 import { BLOCKING_RENTAL_STATUSES, itemInclude, serializeItems } from '../services/items.js';
 import { itemRatingSummary, userRatingSummary } from '../services/stats.js';
-import { getSettings } from '../services/settings.js';
+import { CATEGORIES, getSettings } from '../services/settings.js';
 import { isProtectionAvailableFor } from '../services/protection/index.js';
 import { calculatePriceForDays, calculateRentalPrice } from '../services/pricing.js';
 import { addDaysToDate, zonedToUtc } from '../lib/time.js';
 import { publicUser } from '../lib/serialize.js';
 import { notifyAdmins } from '../services/notifications.js';
+import { DISTRICT_NAMES, distanceFromCenterKm } from '../lib/districts.js';
 
 const router = Router();
 
-const categoryEnum = z.enum(['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'OTHER'], {
+/** Rentals that actually happened (or are happening) – used for the "popular" sort. */
+const RENTED_STATUSES = ['ACCEPTED', 'ACTIVE', 'RETURN_PENDING', 'RETURNED', 'DISPUTED', 'COMPLETED'] as const;
+
+const categoryEnum = z.enum(CATEGORIES, {
   errorMap: () => ({ message: 'Vyber kategóriu.' }),
 });
 const conditionEnum = z.enum(['NEW', 'VERY_GOOD', 'GOOD', 'USED', 'WORN'], {
@@ -106,6 +110,7 @@ const itemBase = z.object({
   availableToTime: timeOfDay.optional(),
   bufferHours: intRange('Rezerva medzi prenájmami', 0, 72).optional(),
   city: z.string({ required_error: 'Mesto je povinné.' }).trim().min(2, 'Zadaj mesto.').max(80),
+  district: z.enum(DISTRICT_NAMES, { errorMap: () => ({ message: 'Vyber mestskú časť zo zoznamu.' }) }).nullable().optional(),
   condition: conditionEnum,
   availableFrom: dateOnly,
   availableTo: dateOnly,
@@ -146,7 +151,12 @@ const assertImagesExist = async (urls: string[]) => {
 
 const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
-  category: categoryEnum.optional(),
+  // One category or a comma-separated group (home page quick filters, e.g. "WORKSHOP,GARDEN").
+  category: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',') : undefined))
+    .pipe(z.array(categoryEnum).max(CATEGORIES.length).optional()),
   city: z.string().trim().max(80).optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
@@ -161,7 +171,7 @@ const listQuery = z.object({
   mode: z.enum(['DAILY', 'HOURLY']).optional(),
   ownerId: z.string().max(64).optional(),
   favorites: z.enum(['true', 'false']).optional(),
-  sort: z.enum(['newest', 'price_asc', 'price_desc', 'rating']).default('newest'),
+  sort: z.enum(['newest', 'price_asc', 'price_desc', 'rating', 'popular']).default('newest'),
   limit: z.coerce.number().int().min(1).max(60).default(24),
   page: z.coerce.number().int().min(1).default(1),
 });
@@ -175,7 +185,7 @@ router.get('/', optionalAuth, async (req, res) => {
       { description: { contains: q.q, mode: 'insensitive' } },
     ];
   }
-  if (q.category) where.category = q.category;
+  if (q.category?.length) where.category = { in: q.category };
   if (q.city) where.city = { contains: q.city, mode: 'insensitive' };
   if (q.mode === 'DAILY') where.dailyRentalEnabled = true;
   if (q.mode === 'HOURLY') where.hourlyRentalEnabled = true;
@@ -217,6 +227,16 @@ router.get('/', optionalAuth, async (req, res) => {
       (a, b) =>
         (b.rating.average ?? b.owner.rating.average ?? 0) - (a.rating.average ?? a.owner.rating.average ?? 0),
     );
+  if (q.sort === 'popular') {
+    // Most rented first (accepted or later), newest as tie-break – candidates are already newest-first.
+    const counts = await prisma.rentalRequest.groupBy({
+      by: ['itemId'],
+      where: { itemId: { in: items.map((i) => i.id) }, status: { in: [...RENTED_STATUSES] } },
+      _count: { _all: true },
+    });
+    const rented = new Map(counts.map((c) => [c.itemId, c._count._all]));
+    items.sort((a, b) => (rented.get(b.id) ?? 0) - (rented.get(a.id) ?? 0));
+  }
   const total = items.length;
   const start = (q.page - 1) * q.limit;
   res.json({ items: items.slice(start, start + q.limit), total, page: q.page, limit: q.limit });
@@ -267,6 +287,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       availableToTime: item.availableToTime,
       bufferHours: item.bufferHours,
       city: item.city,
+      district: item.district,
+      distanceKm: distanceFromCenterKm(item.district),
       condition: item.condition,
       availableFrom: toDateOnlyString(item.availableFrom),
       availableTo: toDateOnlyString(item.availableTo),
@@ -322,6 +344,7 @@ router.post('/', requireAuth, async (req, res) => {
       description: data.description,
       ...rental,
       city: data.city,
+      district: data.district ?? null,
       condition: data.condition,
       availableFrom: parseDateOnly(data.availableFrom),
       availableTo: parseDateOnly(data.availableTo),
@@ -377,6 +400,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
         description: data.description,
         ...rentalSettings,
         city: data.city,
+        district: data.district,
         condition: data.condition,
         availableFrom: from,
         availableTo: to,

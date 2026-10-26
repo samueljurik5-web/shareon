@@ -12,6 +12,8 @@
   --color-neon-purple: #9b5cff;
   --color-neon-pink: #ff5edb;
   --color-neon-green: #42f5a7;
+  --color-teal: #2dd4bf;           /* brand accent (home page) */
+  --color-emerald: #10b981;
   --color-ink: #f7f7ff;            /* primary text */
   --color-ink-2: #a7abc4;          /* secondary text */
   --color-ink-3: #70758f;          /* muted text */
@@ -30,6 +32,7 @@
   --grad-primary: linear-gradient(135deg, #00c2ff 0%, #9b5cff 55%, #ff5edb 100%);
   --grad-secondary: linear-gradient(135deg, #9b5cff 0%, #ff5edb 100%);
   --grad-green: linear-gradient(135deg, #42f5a7 0%, #00c2ff 100%);
+  --grad-teal: linear-gradient(135deg, #2dd4bf 0%, #10b981 100%);
   color-scheme: dark;
 
   /* ── Motion tokens (Neon Night ShareOn) ── */
@@ -89,6 +92,16 @@ body {
   .bg-grad-primary { background: var(--grad-primary); }
   .bg-grad-secondary { background: var(--grad-secondary); }
   .bg-grad-green { background: var(--grad-green); }
+  .bg-grad-teal { background: var(--grad-teal); }
+  .text-gradient-teal {
+    background: var(--grad-teal);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .btn-teal { background: var(--grad-teal); color: #0b0d1a; box-shadow: 0 10px 30px -12px rgb(45 212 191 / .45); }
+  .btn-teal:hover:not(:disabled) { box-shadow: 0 14px 34px -12px rgb(16 185 129 / .6); filter: brightness(1.06); }
+  .chip-teal.chip-active::before { background: var(--grad-teal); }
 
   .card {
     background: var(--color-card);
@@ -147,6 +160,7 @@ body {
   .badge-protect { background: rgb(66 245 167 / .12); color: var(--color-neon-green); border-color: rgb(66 245 167 / .3); }
   .badge-demo { background: rgb(255 94 219 / .12); color: var(--color-neon-pink); border-color: rgb(255 94 219 / .35); }
   .badge-info { background: rgb(0 194 255 / .12); color: var(--color-neon-blue); border-color: rgb(0 194 255 / .3); }
+  .badge-teal { background: rgb(45 212 191 / .12); color: var(--color-teal); border-color: rgb(45 212 191 / .3); }
   .badge-warn { background: rgb(255 200 87 / .12); color: #ffc857; border-color: rgb(255 200 87 / .3); }
   .badge-danger { background: rgb(255 92 122 / .12); color: var(--color-danger); border-color: rgb(255 92 122 / .3); }
 

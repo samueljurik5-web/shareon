@@ -5,7 +5,7 @@ import { ApiError, del, get, patch, post } from '../api/client';
 import type { ItemDetail, PriceBreakdown as Price, RentalMode, Review } from '../api/types';
 import { useAsync } from '../lib/useAsync';
 import {
-  addDaysIso, CATEGORY_LABELS, CONDITION_LABELS, DAILY_RULE_TEXT, daysLabel, formatDate, formatDateRangeLong, formatDayLong, formatEur,
+  addDaysIso, CATEGORY_LABELS, formatKm, CONDITION_LABELS, DAILY_RULE_TEXT, daysLabel, formatDate, formatDateRangeLong, formatDayLong, formatEur,
   formatPeriod, HANDOVER_LABELS, hoursLabel, imageUrl, priceLabels, RENTAL_MODE_LABELS, todayIso,
 } from '../lib/format';
 import { ErrorState, Spinner } from '../components/States';
@@ -90,7 +90,7 @@ export function ItemDetailPage() {
             {priceLabels(item).map((p, i) => (
               <span key={p.mode} className={i === 0 ? 'text-gradient text-2xl font-extrabold' : 'text-lg font-bold text-ink'}>{p.text}</span>
             ))}
-            <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" aria-hidden />{item.city}</span>
+            <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" aria-hidden />{item.city}{item.district && ` – ${item.district}`}{item.distanceKm != null && <span className="text-ink-3">&nbsp;(cca {formatKm(item.distanceKm)} od centra)</span>}</span>
             <RatingInline average={item.rating.average} count={item.rating.count} />
           </div>
           {!item.isOwner && (

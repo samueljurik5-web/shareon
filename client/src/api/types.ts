@@ -1,4 +1,4 @@
-export type Category = 'GARDEN' | 'SPORT' | 'WORKSHOP' | 'LEISURE' | 'OTHER';
+export type Category = 'GARDEN' | 'SPORT' | 'WORKSHOP' | 'LEISURE' | 'ELECTRONICS' | 'HOUSEHOLD' | 'OTHER';
 export type Condition = 'NEW' | 'VERY_GOOD' | 'GOOD' | 'USED' | 'WORN';
 export type RentalStatus =
   | 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'ACTIVE' | 'RETURN_PENDING' | 'RETURNED' | 'DISPUTED' | 'COMPLETED';
@@ -23,6 +23,10 @@ export interface UserStats { completedRentals: number; successfulReturns: number
 
 export interface ItemCard {
   id: string; title: string; category: Category; description: string; city: string;
+  /** Košice district (approximate location) and straight-line distance from the city centre */
+  district: string | null; distanceKm: number | null;
+  /** server estimate: a rental could start today */
+  availableToday: boolean;
   dailyPriceCents: number | null; hourlyPriceCents: number | null; dailyRentalEnabled: boolean; hourlyRentalEnabled: boolean;
   condition: Condition; isActive: boolean; deactivatedByAdmin: boolean; createdAt: string;
   images: { id: string; url: string }[];
@@ -38,7 +42,7 @@ export interface PriceBreakdown {
   protection: null | { provider: string; isDemo: boolean; isInsurance: boolean; available: boolean; feeCents: number; protectedValueCents: number; disclaimer: string; breakdown: Record<string, unknown> };
 }
 
-export interface ItemDetail extends Omit<ItemCard, 'owner' | 'rating'> {
+export interface ItemDetail extends Omit<ItemCard, 'owner' | 'rating' | 'availableToday'> {
   availableFrom: string; availableTo: string; replacementValueCents: number; serialNote?: string | null;
   protectionEligible: boolean;
   minRentalHours: number; maxRentalHours: number; minRentalDays: number; maxRentalDays: number;

@@ -11,6 +11,7 @@ import { PublicProfilePage } from './pages/PublicProfilePage';
 import { RequestsPage } from './pages/RequestsPage';
 import { RequestDetailPage } from './pages/RequestDetailPage';
 import { ProtectionPage } from './pages/ProtectionPage';
+import { HowItWorksPage } from './pages/HowItWorksPage';
 import { ReportPage } from './pages/ReportPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminUsers } from './pages/admin/AdminUsers';
@@ -35,6 +36,7 @@ export function App() {
         <Route path="/requests" element={<RequireAuth><RequestsPage /></RequireAuth>} />
         <Route path="/requests/:id" element={<RequireAuth><RequestDetailPage /></RequireAuth>} />
         <Route path="/protection" element={<ProtectionPage />} />
+        <Route path="/ako-to-funguje" element={<HowItWorksPage />} />
         <Route path="/reports/:id" element={<RequireAuth><ReportPage /></RequireAuth>} />
         <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
         <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />

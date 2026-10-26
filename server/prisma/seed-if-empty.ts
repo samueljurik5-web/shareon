@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
+import { DEMO_CATEGORY_MOVES, DEMO_DATA_VERSION, DEMO_OWNER_DISTRICTS } from './demo-data.js';
 
 const DEMO_EMAILS = [
   'jana@example.sk',
@@ -27,9 +28,6 @@ const HOURLY_DEMO_ITEMS: { title: string; hourly: number; daily: number | null; 
   { title: 'Prenosný projektor + plátno', hourly: 5, daily: 13 },
 ];
 
-/** Bump when demo data needs a new one-time upgrade. prisma/seed.ts writes the current value. */
-const DEMO_DATA_VERSION = 2;
-
 const upgradeDemoData = async (prisma: PrismaClient) => {
   const marker = await prisma.appSetting.findUnique({ where: { key: 'demoDataVersion' } });
   const current = typeof marker?.value === 'number' ? marker.value : 1;
@@ -37,31 +35,53 @@ const upgradeDemoData = async (prisma: PrismaClient) => {
     console.info(`[demo-data] up to date (version ${current})`);
     return;
   }
-  let updated = 0;
-  for (const d of HOURLY_DEMO_ITEMS) {
-    const res = await prisma.item.updateMany({
-      where: { title: d.title, owner: { email: { in: DEMO_EMAILS } } },
-      data: {
-        hourlyRentalEnabled: true,
-        hourlyPriceCents: d.hourly * 100,
-        dailyRentalEnabled: d.daily != null,
-        dailyPriceCents: d.daily != null ? d.daily * 100 : null,
-        minRentalHours: 1,
-        maxRentalHours: 10,
-        availableFromTime: '08:00',
-        availableToTime: '20:00',
-        bufferHours: d.bufferHours ?? 0,
-        ...(d.value ? { replacementValueCents: d.value * 100 } : {}),
-      },
-    });
-    updated += res.count;
+  const demoOwned = (title: string) => ({ title, owner: { email: { in: DEMO_EMAILS } } });
+  // v2: hourly rentals on selected demo items
+  if (current < 2) {
+    let updated = 0;
+    for (const d of HOURLY_DEMO_ITEMS) {
+      const res = await prisma.item.updateMany({
+        where: demoOwned(d.title),
+        data: {
+          hourlyRentalEnabled: true,
+          hourlyPriceCents: d.hourly * 100,
+          dailyRentalEnabled: d.daily != null,
+          dailyPriceCents: d.daily != null ? d.daily * 100 : null,
+          minRentalHours: 1,
+          maxRentalHours: 10,
+          availableFromTime: '08:00',
+          availableToTime: '20:00',
+          bufferHours: d.bufferHours ?? 0,
+          ...(d.value ? { replacementValueCents: d.value * 100 } : {}),
+        },
+      });
+      updated += res.count;
+    }
+    console.info(`[demo-data] v2: hourly rental enabled on ${updated} demo items`);
+  }
+  // v3: Košice districts (approximate distance) + new home page categories – only where still unset/unchanged
+  if (current < 3) {
+    let located = 0;
+    for (const [email, district] of Object.entries(DEMO_OWNER_DISTRICTS)) {
+      const res = await prisma.item.updateMany({ where: { owner: { email }, district: null }, data: { district } });
+      located += res.count;
+    }
+    let moved = 0;
+    for (const m of DEMO_CATEGORY_MOVES) {
+      const res = await prisma.item.updateMany({
+        where: { ...demoOwned(m.title), category: { in: ['LEISURE', 'OTHER'] } },
+        data: { category: m.category },
+      });
+      moved += res.count;
+    }
+    console.info(`[demo-data] v3: district set on ${located} demo items, ${moved} moved to new categories`);
   }
   await prisma.appSetting.upsert({
     where: { key: 'demoDataVersion' },
     create: { key: 'demoDataVersion', value: DEMO_DATA_VERSION },
     update: { value: DEMO_DATA_VERSION },
   });
-  console.info(`[demo-data] upgraded to version ${DEMO_DATA_VERSION}: hourly rental enabled on ${updated} demo items`);
+  console.info(`[demo-data] upgraded to version ${DEMO_DATA_VERSION}`);
 };
 
 const run = async () => {

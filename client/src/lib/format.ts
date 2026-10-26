@@ -22,9 +22,14 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   SPORT: 'Šport',
   WORKSHOP: 'Dielňa',
   LEISURE: 'Voľný čas',
+  ELECTRONICS: 'Technika',
+  HOUSEHOLD: 'Domácnosť',
   OTHER: 'Ostatné',
 };
-export const CATEGORY_EMOJI: Record<Category, string> = { GARDEN: '🌿', SPORT: '🚴', WORKSHOP: '🛠️', LEISURE: '⛺', OTHER: '✨' };
+export const CATEGORY_EMOJI: Record<Category, string> = { GARDEN: '🌿', SPORT: '🚴', WORKSHOP: '🛠️', LEISURE: '⛺', ELECTRONICS: '💻', HOUSEHOLD: '🏠', OTHER: '✨' };
+
+/** "1,2 km" */
+export const formatKm = (km: number) => `${km.toLocaleString('sk-SK', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 
 export const CONDITION_LABELS: Record<Condition, string> = {
   NEW: 'Nový',
@@ -168,6 +173,10 @@ export const formatPeriod = (p: { rentalMode: RentalMode; startDate: string; end
   p.rentalMode === 'HOURLY' ? `${formatDayLong(p.startDate)}, ${p.startTime} – ${p.endTime}` : formatDateRangeLong(p.startDate, p.endDate);
 
 /** Card / detail price label according to enabled modes, e.g. "3 € / hod." and "od 8 € / deň". */
+/** Headline price for cards: daily price first ("od 5 € / deň"), otherwise hourly ("od 2 € / hodinu"). */
+export const priceFrom = (i: { dailyPriceCents: number | null; hourlyPriceCents: number | null }) =>
+  i.dailyPriceCents ? `od ${formatEur(i.dailyPriceCents)} / deň` : i.hourlyPriceCents ? `od ${formatEur(i.hourlyPriceCents)} / hodinu` : null;
+
 export const priceLabels = (i: { dailyPriceCents: number | null; hourlyPriceCents: number | null }) => {
   const out: { mode: RentalMode; text: string }[] = [];
   if (i.hourlyPriceCents) out.push({ mode: 'HOURLY', text: `${formatEur(i.hourlyPriceCents)} / hod.` });

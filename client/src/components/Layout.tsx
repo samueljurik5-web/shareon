@@ -8,6 +8,7 @@ import type { Notification } from '../api/types';
 import { formatDateTime } from '../lib/format';
 import { Avatar } from './Avatar';
 import { ErrorBoundary } from './ErrorBoundary';
+import { INSTAGRAM_URL } from '../lib/site';
 
 const desktopLinks = [
   { to: '/search', label: 'Objaviť' },
@@ -22,7 +23,10 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => window.scrollTo(0, 0), [location.pathname]);
+  // Pages with an #anchor scroll to it themselves (e.g. /ako-to-funguje#kontakt).
+  useEffect(() => {
+    if (!location.hash) window.scrollTo(0, 0);
+  }, [location.pathname, location.hash]);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -66,7 +70,7 @@ export function Layout() {
         </div>
       </header>
 
-      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 md:pb-12">
+      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-10 pt-5 md:pb-12">
         <ErrorBoundary resetKey={location.pathname}>
           <div key={location.pathname} className="animate-page">
             <Outlet />
@@ -74,12 +78,22 @@ export function Layout() {
         </ErrorBoundary>
       </main>
 
-      <footer className="hidden border-t border-line py-6 text-center text-xs text-ink-3 md:block">
-        ShareOn MVP · Košice · Ochrana prenájmu nie je poistenie · Platby sú v MVP simulované
-        <span className="mx-2">·</span>
-        <Link to="/protection" className="underline hover:text-ink">Pravidlá a ochrana</Link>
-        <span className="mx-2">·</span>
-        <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
+      <footer className="border-t border-line pb-28 pt-6 text-center text-xs text-ink-3 md:pb-6">
+        <nav aria-label="Pätička" className="mx-auto mb-3 flex max-w-6xl flex-wrap justify-center gap-x-5 gap-y-2 px-4 text-sm font-semibold text-ink-2">
+          <Link to="/ako-to-funguje" className="hover:text-ink">Ako to funguje</Link>
+          <Link to="/protection" className="hover:text-ink">Ochrana prenájmu</Link>
+          <Link to="/ako-to-funguje#kontakt" className="hover:text-ink">Kontakt</Link>
+          {INSTAGRAM_URL ? (
+            <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="hover:text-ink">Instagram</a>
+          ) : (
+            <span className="text-ink-3" title="Instagram profil pripravujeme">Instagram – čoskoro</span>
+          )}
+        </nav>
+        <p className="px-4">
+          ShareOn MVP · Košice · Ochrana prenájmu nie je poistenie · Platby sú v MVP simulované
+          <span className="mx-2">·</span>
+          <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
+        </p>
       </footer>
 
       <BottomNav />

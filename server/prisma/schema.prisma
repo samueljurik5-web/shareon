@@ -20,6 +20,8 @@ enum Category {
   SPORT
   WORKSHOP
   LEISURE
+  ELECTRONICS
+  HOUSEHOLD
   OTHER
 }
 
@@ -180,6 +182,8 @@ model Item {
   /// Gap required between two reservations of the same item
   bufferHours            Int           @default(0)
   city                   String
+  /// Optional Košice city district (see src/lib/districts.ts) – approximate location, never an address
+  district               String?
   condition              ItemCondition
   availableFrom          DateTime      @db.Date
   availableTo            DateTime      @db.Date

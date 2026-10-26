@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { badRequest } from '../lib/errors.js';
 import { isInsuranceProviderConfigured } from '../config/env.js';
 
-export const CATEGORIES: Category[] = ['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'OTHER'];
+export const CATEGORIES = ['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'ELECTRONICS', 'HOUSEHOLD', 'OTHER'] as const satisfies readonly Category[];
 
 export interface AppSettings {
   protectionMode: ProtectionMode;
@@ -43,7 +43,7 @@ export const settingsPatchSchema = z
     maxProtectedValueCents: z.number().int().min(0).max(1000000),
     depositPercentage: z.number().min(0).max(1),
     maxDepositCents: z.number().int().min(0).max(500000),
-    allowedCategories: z.array(z.enum(['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'OTHER'])).max(5),
+    allowedCategories: z.array(z.enum(CATEGORIES)).max(CATEGORIES.length),
     platformFeeEnabled: z.boolean(),
     platformFeePercentage: z.number().min(0).max(0.3),
   })

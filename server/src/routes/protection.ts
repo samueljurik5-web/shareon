@@ -7,7 +7,7 @@ import { currentUser, optionalAuth, requireAdmin, requireAuth } from '../middlew
 import { euroAmount, rentalPeriodFields } from '../lib/validation.js';
 import { toCents } from '../lib/money.js';
 import { conflict, notFound } from '../lib/errors.js';
-import { getSettings } from '../services/settings.js';
+import { CATEGORIES, getSettings } from '../services/settings.js';
 import { calculateRentalPrice } from '../services/pricing.js';
 import { createProtectionForRental, loadRentalForParty, quoteRental, saveProtectionQuote } from '../services/rentals.js';
 import { getProtectionProvider, DEMO_LABEL, DEMO_NOTICE_SK, PROTECTION_NOTICE, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
@@ -20,7 +20,7 @@ const quoteSchema = z.union([
   z.object({ itemId: z.string().min(1).max(64), ...rentalPeriodFields }),
   // Preview for a listing that is not yet published (Add/Edit item form).
   z.object({
-    category: z.enum(['GARDEN', 'SPORT', 'WORKSHOP', 'LEISURE', 'OTHER']),
+    category: z.enum(CATEGORIES),
     rentalMode: z.enum(['DAILY', 'HOURLY']).default('DAILY'),
     pricePerDay: euroAmount('Cena za deň', 500).optional(),
     pricePerHour: euroAmount('Cena za hodinu', 200).optional(),

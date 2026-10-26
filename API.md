@@ -49,9 +49,9 @@ Items can be rented **na dni (DAILY)**, **na hodiny (HOURLY)** or both (`dailyRe
 ## Items
 | Method | Path | | |
 |---|---|---|---|
-| GET | `/items` | 🔓 | Query: `q, category, city, mode=DAILY\|HOURLY, minPrice, maxPrice, condition (comma list), from, to (YYYY-MM-DD), protection=true, favorites=true, ownerId, sort=newest\|price_asc\|price_desc\|rating, page, limit` |
+| GET | `/items` | 🔓 | Query: `q, category (one or comma list, e.g. WORKSHOP,GARDEN), city, mode=DAILY\|HOURLY, minPrice, maxPrice, condition (comma list), from, to (YYYY-MM-DD), protection=true, favorites=true, ownerId, sort=newest\|price_asc\|price_desc\|rating\|popular (most rented, then newest), page, limit` – each card also has `district`, `distanceKm` (approx. from Košice centre, null without district) and `availableToday` |
 | GET | `/items/:id` | 🔓 | Detail incl. owner rating, item rating, blocked ranges, 3-day estimate |
-| POST | `/items` | 🔑 | `{ title, category, description, city, condition, availableFrom, availableTo, replacementValue, serialNote?, protectionEligible, images[1..5], dailyRentalEnabled, hourlyRentalEnabled, dailyPrice?, hourlyPrice?, minRentalHours, maxRentalHours, minRentalDays, maxRentalDays, availableFromTime, availableToTime, bufferHours, declarations: {…} (all true) }` – price required for each enabled mode, at least one mode |
+| POST | `/items` | 🔑 | `{ title, category, description, city, district? (Košice district name or null), condition, availableFrom, availableTo, replacementValue, serialNote?, protectionEligible, images[1..5], dailyRentalEnabled, hourlyRentalEnabled, dailyPrice?, hourlyPrice?, minRentalHours, maxRentalHours, minRentalDays, maxRentalDays, availableFromTime, availableToTime, bufferHours, declarations: {…} (all true) }` – price required for each enabled mode, at least one mode |
 | PATCH | `/items/:id` | 🔑 owner | Partial of the above (+ `isActive`); cannot re-activate admin-deactivated items |
 | DELETE | `/items/:id` | 🔑 owner | Hard delete without history, otherwise soft delete; 409 if open rentals |
 | POST/DELETE | `/items/:id/favorite` | 🔑 | |
