@@ -10,8 +10,9 @@ function OperatorInfo() {
   return (
     <dl className="card-elevated grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 p-4 text-sm">
       <dt className="text-ink-3">Prevádzkovateľ</dt><dd>{OPERATOR.name ?? MISSING}</dd>
-      <dt className="text-ink-3">IČO</dt><dd>{OPERATOR.id ?? MISSING}</dd>
-      <dt className="text-ink-3">Sídlo / adresa</dt><dd>{OPERATOR.address ?? MISSING}</dd>
+      {/* IČO and address are optional – a private person running the free test version may leave them out. */}
+      {OPERATOR.id && <><dt className="text-ink-3">IČO</dt><dd>{OPERATOR.id}</dd></>}
+      {OPERATOR.address && <><dt className="text-ink-3">Adresa</dt><dd>{OPERATOR.address}</dd></>}
       <dt className="text-ink-3">Kontakt</dt>
       <dd>{CONTACT_EMAIL ? <a href={`mailto:${CONTACT_EMAIL}`} className="text-neon-blue underline">{CONTACT_EMAIL}</a> : MISSING}</dd>
     </dl>
