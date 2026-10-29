@@ -614,7 +614,11 @@ model WaitlistSignup {
   id        String       @id @default(cuid())
   email     String       @unique
   role      WaitlistRole
+  /// City (free text, e.g. "Košice")
+  city      String?
   district  String?
+  /// What the person would like to borrow (optional)
+  wish      String?
   userId    String?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt

@@ -14,7 +14,7 @@ interface Insights {
   daily: { day: string; name: string; count: number }[];
   searches: { query: string; count: number; maxResults: number }[];
   zeroResultSearches: { query: string; count: number }[];
-  waitlist: { byRole: Partial<Record<Role, number>>; entries: { id: string; email: string; role: Role; district: string | null; createdAt: string }[] };
+  waitlist: { byRole: Partial<Record<Role, number>>; entries: { id: string; email: string; role: Role; city: string | null; district: string | null; wish: string | null; createdAt: string }[] };
   demand: { id: string; what: string; email: string | null; district: string | null; createdAt: string }[];
 }
 
@@ -129,16 +129,16 @@ function Content({ data }: { data: Insights }) {
           {data.waitlist.entries.length > 0 && (
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => downloadCsv('shareon-zaujemcovia.csv', [['E-mail', 'Záujem', 'Mestská časť', 'Dátum'], ...data.waitlist.entries.map((w) => [w.email, ROLE_LABELS[w.role], w.district, formatDateTime(w.createdAt)])])}
+              onClick={() => downloadCsv('shareon-zaujemcovia.csv', [['E-mail', 'Záujem', 'Mesto', 'Mestská časť', 'Chce si požičať', 'Dátum'], ...data.waitlist.entries.map((w) => [w.email, ROLE_LABELS[w.role], w.city, w.district, w.wish, formatDateTime(w.createdAt)])])}
             >
               <Download className="h-4 w-4" aria-hidden />Stiahnuť CSV
             </button>
           )}
         </div>
         {data.waitlist.entries.length === 0 ? <EmptyState message="Zatiaľ sa nikto nezapísal." /> : (
-          <Table head={['E-mail', 'Záujem', 'Mestská časť', 'Dátum']}>
+          <Table head={['E-mail', 'Záujem', 'Mesto', 'Chce si požičať', 'Dátum']}>
             {data.waitlist.entries.map((w) => (
-              <tr key={w.id}><Td><a href={`mailto:${w.email}`} className="text-neon-blue">{w.email}</a></Td><Td>{ROLE_LABELS[w.role]}</Td><Td>{w.district ?? '—'}</Td><Td>{formatDateTime(w.createdAt)}</Td></tr>
+              <tr key={w.id}><Td><a href={`mailto:${w.email}`} className="text-neon-blue">{w.email}</a></Td><Td>{ROLE_LABELS[w.role]}</Td><Td>{[w.city, w.district].filter(Boolean).join(' – ') || '—'}</Td><Td>{w.wish ?? '—'}</Td><Td>{formatDateTime(w.createdAt)}</Td></tr>
             ))}
           </Table>
         )}

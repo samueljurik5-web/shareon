@@ -5,6 +5,7 @@ import { parseBody } from '../middleware/validate.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { feedbackLimiter } from '../middleware/rateLimit.js';
 import { trackEvent } from '../services/events.js';
+import { notifyOperator } from '../services/mail.js';
 
 const router = Router();
 
@@ -25,6 +26,13 @@ router.post('/', feedbackLimiter, optionalAuth, async (req, res) => {
     data: { type: data.type, contact: data.contact || null, message: data.message, userId: req.user?.id ?? null },
   });
   await trackEvent('feedback');
+  const TYPE_TEXT = { LIKE: 'Páči sa mi to', BUG: 'Niečo nefunguje', FEATURE: 'Chýba mi funkcia', TESTER: 'Chcem pomôcť testovať' } as const;
+  notifyOperator(`spätná väzba – ${TYPE_TEXT[data.type]}`, [
+    ['Typ', TYPE_TEXT[data.type]],
+    ['Správa', data.message],
+    ['Kontakt', data.contact],
+    ['Účet', req.user?.email],
+  ]);
   res.status(201).json({ feedback: { id: feedback.id } });
 });
 

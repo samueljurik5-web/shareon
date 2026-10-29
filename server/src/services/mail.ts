@@ -54,6 +54,22 @@ export const sendMail = async (to: string, mail: { subject: string; text: string
   }
 };
 
+/**
+ * E-mail to the operator (ADMIN_NOTIFY_EMAIL) about a new waitlist sign-up, demand request or feedback.
+ * Fire-and-forget: never delays or breaks the user's request.
+ */
+export const notifyOperator = (subject: string, fields: [string, string | null | undefined][]) => {
+  const to = env.ADMIN_NOTIFY_EMAIL;
+  if (!to || !isMailConfigured()) return;
+  const rows = fields.filter(([, v]) => v);
+  const adminUrl = `${appUrl()}/admin/insights`;
+  const text = [...rows.map(([k, v]) => `${k}: ${v}`), '', `Všetko v administrácii: ${adminUrl}`].join('\n');
+  const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;color:#111;line-height:1.5">
+<table style="border-collapse:collapse">${rows.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#666">${escapeHtml(k)}</td><td style="padding:4px 0"><strong>${escapeHtml(v!)}</strong></td></tr>`).join('')}</table>
+<p><a href="${escapeHtml(adminUrl)}">Otvoriť štatistiky v ShareOn</a></p></div>`;
+  void sendMail(to, { subject: `ShareOn: ${subject}`, text, html });
+};
+
 /** Placeholder/demo addresses that must never be e-mailed. */
 const isUndeliverable = (email: string, isDemo: boolean) => isDemo || /\.(local|test|example)$/i.test(email) || /@example\.(sk|com)$/i.test(email);
 

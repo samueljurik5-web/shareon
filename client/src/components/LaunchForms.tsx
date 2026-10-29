@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, post } from '../api/client';
 import { KOSICE_DISTRICTS } from '../lib/districts';
-import { Checkbox, SelectField, TextField } from './Field';
+import { Checkbox, SelectField, TextArea, TextField } from './Field';
 
 /** Short GDPR note under every form that collects contact data. */
 export function PrivacyNote() {
@@ -100,7 +100,8 @@ const ROLES = [
 export function WaitlistForm() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<(typeof ROLES)[number][0]>('BORROW');
-  const [district, setDistrict] = useState('');
+  const [city, setCity] = useState('Košice');
+  const [wish, setWish] = useState('');
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -115,9 +116,10 @@ export function WaitlistForm() {
     if (Object.keys(errs).length) return;
     setBusy(true);
     try {
-      const res = await post<{ alreadySignedUp: boolean }>('/api/launch/waitlist', { email: email.trim(), role, district: district || null, consent });
+      const res = await post<{ alreadySignedUp: boolean }>('/api/launch/waitlist', { email: email.trim(), role, city: city.trim() || null, wish: wish.trim() || null, consent });
       setSent(res.alreadySignedUp ? 'Už si na zozname – aktualizovali sme tvoju voľbu.' : 'Ďakujeme! Ozveme sa ti medzi prvými.');
       setEmail('');
+      setWish('');
       setConsent(false);
     } catch (err) {
       setErrors(errorsOf(err));
@@ -132,7 +134,7 @@ export function WaitlistForm() {
         <Rocket className="mt-1 h-6 w-6 shrink-0 text-neon-pink" aria-hidden />
         <div>
           <h2 id="waitlist-heading" className="text-xl font-extrabold">Chcem byť medzi prvými</h2>
-          <p className="mt-1 text-sm text-ink-2">ShareOn spúšťame v Košiciach. Zapíš sa a dáme ti vedieť, keď bude v tvojom okolí dosť vecí.</p>
+          <p className="mt-1 text-sm text-ink-2">ShareOn je v prvej testovacej verzii. Zapíš sa a dáme ti vedieť, keď bude v tvojom meste dosť vecí.</p>
         </div>
       </div>
       {sent ? (
@@ -151,11 +153,9 @@ export function WaitlistForm() {
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
             <TextField id="wl-email" type="email" autoComplete="email" label="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} error={errors.email} />
-            <SelectField id="wl-district" label="Mestská časť (nepovinné)" value={district} onChange={(e) => setDistrict(e.target.value)}>
-              <option value="">Neuvádzať</option>
-              {KOSICE_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </SelectField>
+            <TextField id="wl-city" autoComplete="address-level2" label="Mesto" value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} error={errors.city} />
           </div>
+          <TextArea id="wl-wish" label="Čo by si si chcel požičať? (nepovinné)" value={wish} onChange={(e) => setWish(e.target.value)} maxLength={300} error={errors.wish} placeholder="napr. stan na víkend, vŕtačku, bicykel pre deti" />
           <Checkbox id="wl-consent" checked={consent} onChange={setConsent} error={errors.consent}>
             Súhlasím, aby ma ShareOn kontaktoval e-mailom ohľadom spustenia služby.
           </Checkbox>

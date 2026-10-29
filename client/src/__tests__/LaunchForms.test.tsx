@@ -23,11 +23,13 @@ describe('launch forms', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Chcem požičiavať svoje veci' }));
     fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'eva@example.sk' } });
-    fireEvent.change(screen.getByLabelText('Mestská časť (nepovinné)'), { target: { value: 'Sever' } });
+    expect(screen.getByLabelText('Mesto')).toHaveValue('Košice');
+    fireEvent.change(screen.getByLabelText('Mesto'), { target: { value: 'Prešov' } });
+    fireEvent.change(screen.getByLabelText('Čo by si si chcel požičať? (nepovinné)'), { target: { value: 'Stan na víkend' } });
     fireEvent.click(screen.getByLabelText(/Súhlasím, aby ma ShareOn kontaktoval/));
     fireEvent.click(screen.getByRole('button', { name: 'Zapísať sa' }));
     expect(await screen.findByText('Ďakujeme! Ozveme sa ti medzi prvými.')).toBeInTheDocument();
-    expect(mockPost).toHaveBeenCalledWith('/api/launch/waitlist', { email: 'eva@example.sk', role: 'LEND', district: 'Sever', consent: true });
+    expect(mockPost).toHaveBeenCalledWith('/api/launch/waitlist', { email: 'eva@example.sk', role: 'LEND', city: 'Prešov', wish: 'Stan na víkend', consent: true });
     expect(screen.queryByRole('link', { name: 'zásadách ochrany osobných údajov' })).not.toBeInTheDocument(); // form replaced by thanks
   });
 

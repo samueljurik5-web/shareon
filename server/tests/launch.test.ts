@@ -28,12 +28,16 @@ describe('launch: sample listings, demand validation and insights', () => {
     expect(bad.body.error.details.map((d: { message: string }) => d.message)).toEqual(
       expect.arrayContaining(['Zadaj platný e-mail.', 'Vyber, či chceš požičiavať alebo si požičať.', 'Potvrď, že ťa môžeme kontaktovať.']),
     );
-    await api().post('/api/launch/waitlist').send({ email: 'Eva@Example.sk', role: 'BORROW', district: 'Sever', consent: true }).expect(201);
+    await api()
+      .post('/api/launch/waitlist')
+      .send({ email: 'Eva@Example.sk', role: 'BORROW', city: 'Prešov', wish: 'Vozík za auto na víkend', consent: true })
+      .expect(201);
+    expect(await prisma.waitlistSignup.findFirstOrThrow()).toMatchObject({ city: 'Prešov', wish: 'Vozík za auto na víkend' });
     const again = await api().post('/api/launch/waitlist').send({ email: 'eva@example.sk', role: 'BOTH', consent: true }).expect(200);
     expect(again.body.alreadySignedUp).toBe(true);
     const rows = await prisma.waitlistSignup.findMany();
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ email: 'eva@example.sk', role: 'BOTH', district: null });
+    expect(rows[0]).toMatchObject({ email: 'eva@example.sk', role: 'BOTH', district: null, city: null, wish: null });
   });
 
   it('demand: text required, e-mail optional but needs consent', async () => {

@@ -25,6 +25,8 @@ const schema = z.object({
   // E-mail notifications (optional). Without RESEND_API_KEY no e-mails are sent.
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  /** Your own inbox: new waitlist sign-ups, "Čo hľadáš" requests and feedback are e-mailed here. */
+  ADMIN_NOTIFY_EMAIL: z.string().email().optional(),
   /** Public URL used in e-mail links; Render sets RENDER_EXTERNAL_URL automatically. */
   PUBLIC_APP_URL: z.string().url().optional(),
   RENDER_EXTERNAL_URL: z.string().url().optional(),
