@@ -49,7 +49,7 @@ To stop seeding demo data (e.g. before real users), set `DEMO_SEED_ON_EMPTY=fals
 | `MAIL_FROM` | with `RESEND_API_KEY` | sender on a domain verified in Resend, e.g. `ShareOn <noreply@tvojadomena.sk>` |
 | `ADMIN_EMAILS` | no | comma-separated e-mails of your own registered accounts that should be admins (applied at the next login/registration) – easier than the built-in `admin@shareon.local` |
 | `ADMIN_NOTIFY_EMAIL` | no | your inbox – every new waitlist sign-up (e-mail, city, what they want to borrow), "Čo hľadáš" request and feedback is e-mailed here (needs `RESEND_API_KEY` + `MAIL_FROM`). Without your own domain use `MAIL_FROM=ShareOn <onboarding@resend.dev>` – Resend then delivers only to the address of your Resend account, so set `ADMIN_NOTIFY_EMAIL` to that address |
-| `PUBLIC_APP_URL` | no | link base in e-mails; defaults to Render's `RENDER_EXTERNAL_URL` |
+| `PUBLIC_APP_URL` | with an own domain | e.g. `https://shareon.sk` – link base in e-mails, and visitors of `*.onrender.com` are redirected there (301; `/api/health` is not redirected). Defaults to Render's `RENDER_EXTERNAL_URL` |
 | `VITE_OPERATOR_NAME` | yes before a public launch (build time) | operator name shown in the footer, `/podmienky` and `/ochrana-udajov` (with `VITE_CONTACT_EMAIL`) |
 | `VITE_INSTAGRAM_URL` | no (build time) | public `https://…` Instagram profile for the footer; without it the footer shows „Instagram – čoskoro“ |
 | `VITE_CONTACT_EMAIL` | no (build time) | public contact e-mail shown on `/ako-to-funguje#kontakt` |

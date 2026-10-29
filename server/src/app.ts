@@ -26,6 +26,18 @@ export const createApp = () => {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+
+  // Own domain: visitors of the default *.onrender.com address are sent to PUBLIC_APP_URL (e.g. https://shareon.sk).
+  // The health check stays reachable on any host.
+  const canonical = env.PUBLIC_APP_URL ? new URL(env.PUBLIC_APP_URL) : null;
+  if (canonical) {
+    app.use((req, res, next) => {
+      if (req.hostname.endsWith('.onrender.com') && req.hostname !== canonical.hostname && req.path !== '/api/health' && ['GET', 'HEAD'].includes(req.method)) {
+        return res.redirect(301, `${canonical.origin}${req.originalUrl}`);
+      }
+      next();
+    });
+  }
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
