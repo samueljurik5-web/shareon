@@ -94,7 +94,7 @@ export function Layout() {
           )}
         </nav>
         <p className="px-4">
-          {OPERATOR.name ? `${OPERATOR.name}${OPERATOR.id ? `, IČO ${OPERATOR.id}` : ''} · ` : ''}ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
+          {OPERATOR.name ? `${OPERATOR.name} · ` : ''}ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
           <span className="mx-2">·</span>
           <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
         </p>

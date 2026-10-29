@@ -9,6 +9,4 @@ interface ImportMetaEnv {
   readonly VITE_CONTACT_EMAIL?: string;
   /** Operator shown in the legal pages and footer – optional, set at build time. */
   readonly VITE_OPERATOR_NAME?: string;
-  readonly VITE_OPERATOR_ID?: string;
-  readonly VITE_OPERATOR_ADDRESS?: string;
 }
