@@ -6,8 +6,8 @@ import { useAsync } from '../lib/useAsync';
 import { useUi } from '../context/UiContext';
 import { ErrorState, Spinner } from '../components/States';
 import { PhotoUploader } from '../components/PhotoUploader';
-import { SelectField, TextArea, TextField } from '../components/Field';
-import { formatDateTime, formatEur, imageUrl, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS } from '../lib/format';
+import { SelectField, TextArea } from '../components/Field';
+import { formatDateTime, formatEur, imageUrl, RENTAL_MODE_LABELS, RENTAL_STATUS_LABELS, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS } from '../lib/format';
 
 const KIND_LABEL = { EVIDENCE: 'Dôkaz', RESPONSE: 'Odpoveď druhej strany', ADMIN_NOTE_PUBLIC: 'Správa od administrátora' } as const;
 
@@ -38,8 +38,8 @@ export function ReportPage() {
       key: d.id,
       node: (
         <>
-          <span className="badge badge-protect">Rozhodnutie: {REPORT_STATUS_LABELS[d.decision]}</span>
-          {d.approvedAmountCents != null && <span className="ml-2">Schválená suma: <strong>{formatEur(d.approvedAmountCents)}</strong></span>}
+          <span className="badge badge-protect">Stav: {REPORT_STATUS_LABELS[d.decision]}</span>
+          {d.admin && <span className="ml-2 text-xs text-ink-3">{d.admin.name}</span>}
           {d.publicNote && <p className="mt-1 text-ink-2">{d.publicNote}</p>}
           {d.internalNote && <p className="mt-1 rounded-xl bg-night-2 p-2 text-xs text-ink-3">Interná poznámka: {d.internalNote}</p>}
         </>
@@ -57,16 +57,10 @@ export function ReportPage() {
           </div>
           <h1 className="text-2xl font-extrabold">Hlásenie k predmetu {r.item.title}</h1>
           <p className="text-ink-2">{r.description}</p>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <span>Požadovaná suma: <strong>{formatEur(r.requestedAmountCents)}</strong></span>
-            {r.approvedAmountCents != null && <span>Schválená suma: <strong className="text-neon-green">{formatEur(r.approvedAmountCents)}</strong></span>}
-          </div>
+          {r.contactNote && <p className="text-sm"><span className="text-ink-3">Poznámka ku kontaktu:</span> {r.contactNote}</p>}
           {r.rentalRequestId && <Link to={`/requests/${r.rentalRequestId}`} className="text-sm font-semibold text-neon-blue">Zobraziť prenájom →</Link>}
         </div>
         <p className="notice notice-warn" role="note">{r.disclaimer}</p>
-        {r.approvedAmountCents != null && r.approvedAmountCents > 0 && (
-          <p className="notice">Schválená suma je rozhodnutím administrátora. V MVP sa žiadna kompenzácia nevypláca automaticky – vyrovnanie prebieha podľa pokynov ShareOn (prípadne zo simulovanej zálohy).</p>
-        )}
         <section className="card p-5">
           <h2 className="mb-4 font-bold">Priebeh</h2>
           <ol className="space-y-4 border-l border-line pl-5">
@@ -119,46 +113,32 @@ function AddEvidence({ report, onDone }: { report: ReportDetail; onDone: () => v
   );
 }
 
+const ADMIN_STATUSES = ['UNDER_REVIEW', 'NEEDS_MORE_INFORMATION', 'RESOLVED', 'REJECTED'] as const;
+
 function AdminPanel({ report, onDone }: { report: ReportDetail; onDone: () => void }) {
   const { toast, confirm } = useUi();
-  const [note, setNote] = useState('');
-  const [decision, setDecision] = useState<'APPROVED' | 'PARTIALLY_APPROVED' | 'REJECTED'>('PARTIALLY_APPROVED');
-  const [amount, setAmount] = useState('');
+  const closed = report.status === 'RESOLVED' || report.status === 'REJECTED';
+  const [status, setStatus] = useState<(typeof ADMIN_STATUSES)[number]>(report.status === 'OPEN' ? 'UNDER_REVIEW' : 'RESOLVED');
   const [publicNote, setPublicNote] = useState('');
   const [internalNote, setInternalNote] = useState('');
-  const [depositAction, setDepositAction] = useState('NONE');
-  const [withheld, setWithheld] = useState('');
   const [busy, setBusy] = useState(false);
+  const rental = report.rental;
 
-  const setStatus = async (status: string) => {
-    setBusy(true);
-    try {
-      await patch(`/api/admin/reports/${report.id}/status`, { status, note: note || null });
-      setNote('');
-      toast('Stav hlásenia zmenený.');
-      onDone();
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Chyba', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const decide = async (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
-    const ok = await confirm({ title: 'Potvrdiť rozhodnutie?', message: 'Rozhodnutie sa zapíše do audit logu a oznámi obom stranám. Nevypláca sa automaticky žiadna kompenzácia.' });
-    if (!ok) return;
+    if (status === 'RESOLVED' || status === 'REJECTED') {
+      const ok = await confirm({
+        title: `${REPORT_STATUS_LABELS[status]} – uzavrieť hlásenie?`,
+        message: 'Zmena sa zapíše do audit logu a oznámi obom stranám. Žiadna náhrada sa nevypláca automaticky.',
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     try {
-      await post(`/api/admin/reports/${report.id}/decision`, {
-        decision,
-        approvedAmount: decision === 'REJECTED' ? 0 : decision === 'APPROVED' ? report.requestedAmountCents / 100 : Number(amount.replace(',', '.')) || 0,
-        publicNote: publicNote || null,
-        internalNote: internalNote || null,
-        depositAction,
-        ...(depositAction === 'PARTIAL_WITHHOLD' ? { withheldAmount: Number(withheld.replace(',', '.')) || 0 } : {}),
-      });
-      toast('Rozhodnutie uložené.');
+      await patch(`/api/admin/reports/${report.id}/status`, { status, publicNote: publicNote || null, internalNote: internalNote || null });
+      setPublicNote('');
+      setInternalNote('');
+      toast('Stav hlásenia bol zmenený.');
       onDone();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Chyba', 'error');
@@ -169,36 +149,44 @@ function AdminPanel({ report, onDone }: { report: ReportDetail; onDone: () => vo
 
   return (
     <div className="space-y-4">
-      <div className="card space-y-3 border-neon-pink/30 p-5">
-        <h2 className="font-bold">Admin: stav hlásenia</h2>
-        <TextArea id="adm-note" label="Správa pre strany (nepovinné)" value={note} onChange={(e) => setNote(e.target.value)} />
-        <div className="flex flex-wrap gap-2">
-          {report.status === 'OPEN' && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setStatus('UNDER_REVIEW')}>Začať posudzovať</button>}
-          {report.isOpen && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setStatus('NEEDS_MORE_INFORMATION')}>Vyžiadať viac informácií</button>}
-          {report.status !== 'RESOLVED' && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setStatus('RESOLVED')}>Uzavrieť</button>}
+      {rental && (
+        <div className="card space-y-3 p-5 text-sm">
+          <h2 className="font-bold">Rezervácia</h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="text-ink-3">Stav</dt><dd>{RENTAL_STATUS_LABELS[rental.status]}</dd>
+            <dt className="text-ink-3">Typ</dt><dd>{RENTAL_MODE_LABELS[rental.rentalMode]}</dd>
+            <dt className="text-ink-3">Termín</dt><dd>{formatDateTime(rental.startAt)} – {formatDateTime(rental.endAt)}</dd>
+            <dt className="text-ink-3">Vrátené</dt><dd>{rental.returnedAt ? formatDateTime(rental.returnedAt) : '–'}</dd>
+            <dt className="text-ink-3">Cena</dt><dd>{formatEur(rental.rentalPriceCents)} + Ochrana prenájmu {formatEur(rental.protectionFeeCents)}</dd>
+          </dl>
+          {[['Nájomca', rental.renter], ['Majiteľ', rental.owner]].map(([role, u]) => {
+            const p = u as typeof rental.renter;
+            return (
+              <div key={role as string} className="card-elevated p-3">
+                <div className="text-xs text-ink-3">{role as string}</div>
+                <Link to={`/users/${p.id}`} className="font-semibold hover:underline">{p.name}</Link>
+                <div className="text-xs text-ink-2"><a href={`mailto:${p.email}`} className="hover:underline">{p.email}</a> · <a href={`tel:${p.phone}`} className="hover:underline">{p.phone}</a></div>
+              </div>
+            );
+          })}
         </div>
-      </div>
-      {report.isOpen && report.rentalRequestId && (
-        <form onSubmit={decide} className="card space-y-3 border-neon-pink/30 p-5">
-          <h2 className="font-bold">Admin: rozhodnutie o kompenzácii</h2>
-          <SelectField id="adm-dec" label="Rozhodnutie" value={decision} onChange={(e) => setDecision(e.target.value as typeof decision)}>
-            <option value="APPROVED">Schváliť ({formatEur(report.requestedAmountCents)})</option>
-            <option value="PARTIALLY_APPROVED">Čiastočne schváliť</option>
-            <option value="REJECTED">Zamietnuť</option>
-          </SelectField>
-          {decision === 'PARTIALLY_APPROVED' && <TextField id="adm-amount" label="Schválená suma (€)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />}
-          <SelectField id="adm-dep" label="Simulovaná záloha" value={depositAction} onChange={(e) => setDepositAction(e.target.value)}>
-            <option value="NONE">Bez zmeny</option>
-            <option value="RELEASE">Uvoľniť</option>
-            <option value="WITHHOLD">Zadržať celú</option>
-            <option value="PARTIAL_WITHHOLD">Zadržať čiastočne</option>
-          </SelectField>
-          {depositAction === 'PARTIAL_WITHHOLD' && <TextField id="adm-withheld" label="Zadržaná suma (€)" inputMode="decimal" value={withheld} onChange={(e) => setWithheld(e.target.value)} />}
-          <TextArea id="adm-pub" label="Zdôvodnenie (vidia strany)" value={publicNote} onChange={(e) => setPublicNote(e.target.value)} />
-          <TextArea id="adm-int" label="Interná poznámka (len admin)" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} />
-          <button className="btn btn-primary w-full" disabled={busy}>Uložiť rozhodnutie</button>
-        </form>
       )}
+      <form onSubmit={save} className="card space-y-3 border-neon-pink/30 p-5">
+        <h2 className="font-bold">Admin: posúdenie hlásenia</h2>
+        <p className="text-xs text-ink-3">Aktuálny stav: <strong className="text-ink">{REPORT_STATUS_LABELS[report.status]}</strong>. Hlásenia sa nikdy neschvaľujú ani nevyplácajú automaticky.</p>
+        {closed ? (
+          <p className="text-sm text-ink-2">Hlásenie je uzavreté.</p>
+        ) : (
+          <>
+            <SelectField id="adm-status" label="Nový stav" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+              {ADMIN_STATUSES.filter((st) => st !== report.status).map((st) => <option key={st} value={st}>{REPORT_STATUS_LABELS[st]}</option>)}
+            </SelectField>
+            <TextArea id="adm-pub" label="Správa pre obe strany (nepovinné)" value={publicNote} onChange={(e) => setPublicNote(e.target.value)} maxLength={2000} />
+            <TextArea id="adm-int" label="Interná poznámka (vidí len admin)" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} maxLength={2000} />
+            <button className="btn btn-primary w-full" disabled={busy}>Uložiť stav</button>
+          </>
+        )}
+      </form>
     </div>
   );
 }

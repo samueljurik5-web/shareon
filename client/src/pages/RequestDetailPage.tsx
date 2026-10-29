@@ -1,8 +1,8 @@
-import { AlertTriangle, CalendarClock, Check, Mail, Phone, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Check, Mail, Phone, ShieldCheck } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, get, patch, post } from '../api/client';
-import type { HandoverRecord, Party, RentalDetail, RentalStatus } from '../api/types';
+import type { HandoverRecord, Party, RentalDetail, RentalStatus, ReportType } from '../api/types';
 import { useAsync } from '../lib/useAsync';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
@@ -15,8 +15,8 @@ import { Avatar } from '../components/Avatar';
 import { SelectField, TextArea, TextField } from '../components/Field';
 import { Modal } from '../components/Modal';
 import {
-  DAILY_RULE_TEXT, DAMAGE_DISCLAIMER, DEPOSIT_STATUS_LABELS, formatDateTime, formatDayLong, formatDuration, formatEur, formatPeriod, HANDOVER_LABELS, imageUrl,
-  RENTAL_MODE_TITLES, RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS,
+  DAILY_RULE_TEXT, DAMAGE_DISCLAIMER, formatDateTime, formatDayLong, formatDuration, formatPeriod, HANDOVER_LABELS, imageUrl,
+  RENTAL_MODE_TITLES, RENTAL_STATUS_BADGE, RENTAL_STATUS_LABELS, REPORT_FORM_TYPES, REPORT_STATUS_LABELS, REPORT_TYPE_LABELS, REPORT_WINDOW_TEXT,
 } from '../lib/format';
 import type { RentalMode } from '../api/types';
 
@@ -136,10 +136,10 @@ export function RequestDetailPage() {
         {/* Actions */}
         {(can('ACCEPT') || can('REJECT') || can('CANCEL') || can('COMPLETE') || can('PROPOSE_DATES')) && (
           <div className="card flex flex-wrap gap-2 p-4">
-            {can('ACCEPT') && <button className="btn btn-primary" disabled={busy} onClick={() => act('ACCEPT', { title: 'Prijať žiadosť?', message: 'Nájomcovi sa zobrazia tvoje kontaktné údaje a zablokuje sa simulovaná záloha.', confirmLabel: 'Prijať' })}>Prijať</button>}
+            {can('ACCEPT') && <button className="btn btn-primary" disabled={busy} onClick={() => act('ACCEPT', { title: 'Prijať žiadosť?', message: 'Nájomcovi sa zobrazia tvoje kontaktné údaje a aktivuje sa Ochrana prenájmu.', confirmLabel: 'Prijať' })}>Prijať</button>}
             {can('PROPOSE_DATES') && <button className="btn btn-secondary" onClick={() => setProposeOpen((o) => !o)}>Navrhnúť iný termín</button>}
             {can('REJECT') && <button className="btn btn-danger" disabled={busy} onClick={() => act('REJECT', { title: 'Zamietnuť žiadosť?', danger: true, confirmLabel: 'Zamietnuť' })}>Zamietnuť</button>}
-            {can('COMPLETE') && <button className="btn btn-primary" disabled={busy} onClick={() => act('COMPLETE', { title: 'Dokončiť prenájom?', message: 'Potvrdzuješ, že nemáš ďalšie nároky. Záloha bude uvoľnená.' })}>Dokončiť bez nárokov</button>}
+            {can('COMPLETE') && <button className="btn btn-primary" disabled={busy} onClick={() => act('COMPLETE', { title: 'Dokončiť prenájom?', message: 'Potvrdzuješ, že vec je v poriadku a nemáš ďalšie nároky.' })}>Dokončiť bez nárokov</button>}
             {can('CANCEL') && <button className="btn btn-ghost" disabled={busy} onClick={() => act('CANCEL', { title: 'Zrušiť prenájom?', danger: true, confirmLabel: 'Zrušiť prenájom' })}>Zrušiť</button>}
           </div>
         )}
@@ -176,26 +176,16 @@ export function RequestDetailPage() {
             rentalMode={r.rentalMode}
             units={r.rentalMode === 'HOURLY' ? (r.durationMinutes ?? 0) / 60 : (r.durationDays ?? 0)}
             {...r.price}
-            isDemo={r.protection?.isDemo ?? true}
-            simulated={r.deposit?.isSimulated ?? true}
+            showPaymentNote
           />
         </div>
-        {r.protection && (
-          <div className="card space-y-3 p-5">
-            <h2 className="flex items-center gap-2 font-bold"><ShieldCheck className="h-5 w-5 text-neon-green" aria-hidden />Ochrana prenájmu</h2>
-            <p className="text-sm text-ink-2">Stav: <strong>{r.protection.status}</strong> · Chránená hodnota do {formatEur(r.protection.protectedValueCents)}</p>
-            <ProtectionNotice demo={r.protection.isDemo} compact />
-          </div>
-        )}
-        {!r.protection && r.price.protectionFeeCents > 0 && <ProtectionNotice compact />}
-        {r.deposit && (
-          <div className="card space-y-2 p-5">
-            <h2 className="flex items-center gap-2 font-bold"><Wallet className="h-5 w-5 text-neon-blue" aria-hidden />Vratná kaucia</h2>
-            {r.deposit.label && <span className="badge badge-demo">{r.deposit.label}</span>}
-            <p className="text-sm text-ink-2">{formatEur(r.deposit.amountCents)} · {DEPOSIT_STATUS_LABELS[r.deposit.status]}{r.deposit.withheldCents > 0 && ` · zadržané ${formatEur(r.deposit.withheldCents)}`}</p>
-            <p className="text-xs text-ink-3">V MVP sa žiadne peniaze neblokujú ani neprevádzajú.</p>
-          </div>
-        )}
+        <div className="card space-y-3 p-5">
+          <h2 className="flex items-center gap-2 font-bold"><ShieldCheck className="h-5 w-5 text-neon-green" aria-hidden />Ochrana prenájmu</h2>
+          <p className="text-sm text-ink-2">
+            {r.protection ? <>Stav: <strong>{PROTECTION_STATUS_LABELS[r.protection.status] ?? r.protection.status}</strong></> : 'Aktivuje sa po prijatí žiadosti majiteľom.'}
+          </p>
+          <ProtectionNotice />
+        </div>
         <div className="card space-y-3 p-5">
           <h2 className="font-bold">Problémy a spory</h2>
           {r.reports.length === 0 && <p className="text-sm text-ink-3">Žiadne nahlásené problémy.</p>}
@@ -212,7 +202,7 @@ export function RequestDetailPage() {
           {can('REPORT') && <button className="btn btn-danger btn-sm w-full" onClick={() => setReportOpen(true)}><AlertTriangle className="h-4 w-4" aria-hidden />Nahlásiť problém</button>}
         </div>
       </aside>
-      {reportOpen && <ReportModal rentalId={r.id} maxCents={r.item.replacementValueCents} defaultType={r.isOverdue ? 'LATE_RETURN' : 'ITEM_DAMAGED'} onClose={() => setReportOpen(false)} />}
+      {reportOpen && <ReportModal rentalId={r.id} defaultType={r.isOverdue ? 'LATE_RETURN' : 'ITEM_DAMAGED'} onClose={() => setReportOpen(false)} />}
     </div>
   );
 }
@@ -346,12 +336,20 @@ function ProposeDates({ rentalId, mode, onDone }: { rentalId: string; mode: Rent
   );
 }
 
-function ReportModal({ rentalId, maxCents, defaultType, onClose }: { rentalId: string; maxCents: number; defaultType: string; onClose: () => void }) {
+const PROTECTION_STATUS_LABELS: Record<string, string> = {
+  QUOTED: 'Pripravená',
+  ACTIVE: 'Aktívna',
+  CLAIM_UNDER_REVIEW: 'Hlásenie sa posudzuje',
+  EXPIRED: 'Ukončená – prenájom skončil',
+  CANCELLED: 'Zrušená',
+};
+
+function ReportModal({ rentalId, defaultType, onClose }: { rentalId: string; defaultType: ReportType; onClose: () => void }) {
   const navigate = useNavigate();
   const { toast } = useUi();
-  const [type, setType] = useState(defaultType);
+  const [type, setType] = useState<ReportType>(defaultType);
   const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
+  const [contactNote, setContactNote] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -359,7 +357,7 @@ function ReportModal({ rentalId, maxCents, defaultType, onClose }: { rentalId: s
     e.preventDefault();
     setBusy(true);
     try {
-      const res = await post<{ report: { id: string } }>(`/api/rental-requests/${rentalId}/dispute`, { type, description, requestedAmount: Number(amount.replace(',', '.')) || 0, photos });
+      const res = await post<{ report: { id: string } }>(`/api/rental-requests/${rentalId}/dispute`, { type, description, photos, contactNote: contactNote.trim() || null });
       toast('Problém bol nahlásený. Posúdi ho administrátor.');
       navigate(`/reports/${res.report.id}`);
     } catch (err) {
@@ -376,13 +374,13 @@ function ReportModal({ rentalId, maxCents, defaultType, onClose }: { rentalId: s
       {(close) => (
       <form onSubmit={submit} className="space-y-4">
         <h2 className="text-lg font-bold">Nahlásiť problém</h2>
-        <p className="notice notice-warn">{DAMAGE_DISCLAIMER}</p>
-        <SelectField id="rep-type" label="Typ problému" value={type} onChange={(e) => setType(e.target.value)}>
-          {Object.entries(REPORT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        <p className="text-sm text-ink-2">{REPORT_WINDOW_TEXT} {DAMAGE_DISCLAIMER}</p>
+        <SelectField id="rep-type" label="Typ problému" value={type} onChange={(e) => setType(e.target.value as ReportType)} error={errors.type}>
+          {[...REPORT_FORM_TYPES, ...(REPORT_FORM_TYPES.includes(defaultType) ? [] : [defaultType])].map((k) => <option key={k} value={k}>{REPORT_TYPE_LABELS[k]}</option>)}
         </SelectField>
-        <TextArea id="rep-desc" label="Popis" value={description} onChange={(e) => setDescription(e.target.value)} error={errors.description} hint="Čo sa stalo, kedy a ako to vieš doložiť (min. 20 znakov)." />
-        <TextField id="rep-amount" label="Požadovaná suma (€, nepovinné)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} error={errors.requestedAmount} hint={`Najviac ${formatEur(maxCents)} (hodnota predmetu). Nejde o automatický nárok.`} />
-        <PhotoUploader value={photos} onChange={setPhotos} label="Dôkazy (fotografie)" />
+        <TextArea id="rep-desc" label="Popis" value={description} onChange={(e) => setDescription(e.target.value)} error={errors.description} maxLength={3000} hint="Čo sa stalo, kedy a ako to vieš doložiť (min. 20 znakov)." />
+        <PhotoUploader value={photos} onChange={setPhotos} label="Fotografie (nepovinné, max. 5)" />
+        <TextField id="rep-contact" label="Poznámka ku kontaktu (nepovinné)" value={contactNote} onChange={(e) => setContactNote(e.target.value)} error={errors.contactNote} maxLength={500} hint="Napr. kedy a ako ťa môžeme zastihnúť." />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn btn-secondary" onClick={close}>Zrušiť</button>
           <button className="btn btn-danger" disabled={busy || description.trim().length < 20}>Odoslať hlásenie</button>

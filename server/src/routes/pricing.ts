@@ -7,7 +7,7 @@ import { notFound } from '../lib/errors.js';
 import { rentalPeriodFields } from '../lib/validation.js';
 import { quoteRental } from '../services/rentals.js';
 import { describePeriod } from '../services/periodText.js';
-import { DEMO_LABEL, DEMO_NOTICE_SK, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
+import { PAYMENTS_SIMULATED_SK, PROTECTION_FEE_HINT_SK, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
 
 const router = Router();
 
@@ -37,7 +37,7 @@ router.post('/quote', optionalAuth, async (req, res) => {
       },
       price,
     },
-    notices: { protection: PROTECTION_NOTICE_SK, demoLabel: DEMO_LABEL, demoNotice: DEMO_NOTICE_SK },
+    notices: { protection: PROTECTION_NOTICE_SK, protectionHint: PROTECTION_FEE_HINT_SK, payment: PAYMENTS_SIMULATED_SK },
   });
 });
 

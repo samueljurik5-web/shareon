@@ -155,6 +155,7 @@ model User {
   auditLogs       AuditLog[]
   handoverRecords HandoverRecord[]
   quotes          ProtectionQuote[]
+  feedback        Feedback[]
 
   @@index([role])
   @@index([city])
@@ -256,11 +257,12 @@ model RentalRequest {
   pricePerUnitCents  Int
   rentalPriceCents   Int
   protectionFeeCents Int
-  depositCents       Int
+  /// Legacy – ShareOn has no deposit; always 0 for new rentals
+  depositCents       Int            @default(0)
   platformFeeCents   Int
   totalCents         Int
-  /// Amount returned to the renter if nothing is withheld (= deposit)
-  refundableCents    Int
+  /// Legacy – refundable deposit; always 0 for new rentals
+  refundableCents    Int            @default(0)
   currency           String         @default("EUR")
   protectionMode     ProtectionMode
 
@@ -461,6 +463,8 @@ model DamageReport {
   description          String
   requestedAmountCents Int          @default(0)
   approvedAmountCents  Int?
+  /// Optional note how/when the reporter can be reached
+  contactNote          String?
   status               ReportStatus @default(OPEN)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
@@ -563,4 +567,27 @@ model AppSetting {
   value     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum FeedbackType {
+  LIKE
+  BUG
+  FEATURE
+  TESTER
+}
+
+/// Feedback from the home page (anonymous or signed in). Read by admins only.
+model Feedback {
+  id        String       @id @default(cuid())
+  type      FeedbackType
+  /// Name or e-mail – optional
+  contact   String?
+  message   String
+  userId    String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
 }

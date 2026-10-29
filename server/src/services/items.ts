@@ -1,7 +1,5 @@
 import type { Item, ItemImage, Prisma, User } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { getSettings } from './settings.js';
-import { isProtectionAvailableFor } from './protection/index.js';
 import { itemRatingsMap, userRatingsMap } from './stats.js';
 import { BLOCKING_RENTAL_STATUSES, isAvailableToday } from './availability.js';
 import { distanceFromCenterKm } from '../lib/districts.js';
@@ -18,7 +16,6 @@ export const itemInclude = {
 
 /** Card-level serialization for lists. */
 export const serializeItems = async (items: ItemWithRelations[], viewerId?: string) => {
-  const settings = await getSettings();
   const now = new Date();
   const [ownerRatings, itemRatings, favorites, reservations] = await Promise.all([
     userRatingsMap([...new Set(items.map((i) => i.ownerId))]),
@@ -62,7 +59,6 @@ export const serializeItems = async (items: ItemWithRelations[], viewerId?: stri
     images: i.images.map((img) => ({ id: img.id, url: img.url })),
     owner: { ...i.owner, rating: ownerRatings.get(i.ownerId) ?? { average: null, count: 0 } },
     rating: itemRatings.get(i.id) ?? { average: null, count: 0 },
-    protectionAvailable: isProtectionAvailableFor(settings, i),
     isFavorite: favSet.has(i.id),
   }));
 };

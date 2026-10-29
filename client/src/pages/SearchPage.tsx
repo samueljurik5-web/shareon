@@ -9,7 +9,7 @@ import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import { useAsync } from '../lib/useAsync';
 import { CONDITION_LABELS, EMPTY } from '../lib/format';
 
-const FILTER_KEYS = ['q', 'category', 'city', 'mode', 'minPrice', 'maxPrice', 'condition', 'from', 'to', 'protection', 'sort'];
+const FILTER_KEYS = ['q', 'category', 'city', 'mode', 'minPrice', 'maxPrice', 'condition', 'from', 'to', 'sort'];
 
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -92,10 +92,7 @@ export function SearchPage() {
               ))}
             </div>
           </fieldset>
-          <label className="flex items-center gap-3 self-end text-sm font-semibold text-ink-2">
-            <input type="checkbox" className="h-5 w-5 accent-[#42F5A7]" checked={params.get('protection') === 'true'} onChange={(e) => set('protection', e.target.checked ? 'true' : '')} />
-            Dostupná Ochrana prenájmu
-          </label>
+          <p className="self-end text-sm font-semibold text-neon-green"><span aria-hidden>🛡️ </span>Všetky veci sú bez kaucie a s Ochranou prenájmu v cene.</p>
           <button className="btn btn-ghost btn-sm self-end justify-self-start" onClick={() => setParams(new URLSearchParams(), { replace: true })}>
             <X className="h-4 w-4" aria-hidden />Vymazať filtre
           </button>

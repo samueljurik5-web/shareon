@@ -5,11 +5,13 @@ import { getSettings } from './settings.js';
 import { calculateRentalPrice, loadRiskSignals } from './pricing.js';
 import type { PriceBreakdown } from './pricing.js';
 import { getProtectionProvider } from './protection/index.js';
-import { createDepositForRental, tryTransitionDeposit } from './deposit/index.js';
+// Legacy deposits (before deposits were removed) are still released/disputed with the rental.
+import { tryTransitionDeposit } from './deposit/index.js';
 import { notify } from './notifications.js';
 import { checkItemAvailability, resolvePeriod } from './availability.js';
 import type { ResolvedPeriod } from './availability.js';
 import { describePeriod } from './periodText.js';
+import { isWithinReportWindow } from './reportWindow.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -60,10 +62,11 @@ const periodAndPriceData = (period: ResolvedPeriod, price: PriceBreakdown, withP
     pricePerUnitCents: price.pricePerUnitCents,
     rentalPriceCents: price.rentalPriceCents,
     protectionFeeCents,
-    depositCents: price.depositCents,
+    // ShareOn has no deposit – the legacy columns are always 0 for new rentals.
+    depositCents: 0,
     platformFeeCents: price.platformFeeCents,
     totalCents: price.totalCents - (price.protectionFeeCents - protectionFeeCents),
-    refundableCents: price.refundableCents,
+    refundableCents: 0,
   };
 };
 
@@ -137,8 +140,8 @@ export const createRentalRequest = async (renter: User, input: CreateRentalInput
   });
   if (duplicate > 0) throw conflict('Na tento predmet už máš čakajúcu žiadosť.');
 
-  if (price.protectionFeeCents > 0 && !input.acceptProtectionDisclaimer) {
-    throw badRequest('Potvrď, že rozumieš, že Ochrana prenájmu nie je poistenie.');
+  if (!input.acceptProtectionDisclaimer) {
+    throw badRequest('Potvrď, že súhlasíš s pravidlami Ochrany prenájmu.');
   }
 
   return prisma.$transaction(async (tx) => {
@@ -150,7 +153,7 @@ export const createRentalRequest = async (renter: User, input: CreateRentalInput
         ...periodAndPriceData(period, price, true),
         message: input.message ?? null,
         handoverMethod: input.handoverMethod,
-        protectionMode: price.protectionMode,
+        protectionMode: 'PROTECTION_FEE',
         rulesAcceptedAt: new Date(),
         protectionDisclaimerAcceptedAt: input.acceptProtectionDisclaimer ? new Date() : null,
       },
@@ -176,12 +179,11 @@ export const createRentalRequest = async (renter: User, input: CreateRentalInput
   });
 };
 
-/** Side effects when a rental becomes ACCEPTED: protection record + simulated deposit hold. */
+/** Side effect when a rental becomes ACCEPTED: activate its Ochrana prenájmu record (no deposit in ShareOn). */
 const onAccepted = async (rental: RentalRequest, tx: Tx) => {
   if (rental.protectionFeeCents > 0) {
     await createProtectionForRental(rental, tx);
   }
-  await createDepositForRental(rental, tx);
 };
 
 export const createProtectionForRental = async (rental: RentalRequest, tx: Tx = prisma) => {
@@ -192,8 +194,7 @@ export const createProtectionForRental = async (rental: RentalRequest, tx: Tx = 
     where: { rentalRequestId: rental.id },
     orderBy: { createdAt: 'desc' },
   });
-  const settings = await getSettings();
-  const provider = getProtectionProvider(settings);
+  const provider = getProtectionProvider();
   // Use the fee snapshot agreed in the request – never re-price after the renter accepted it.
   const record = await provider.createProtection({
     rentalRequestId: rental.id,
@@ -246,7 +247,9 @@ export const availableActions = (rental: RentalRequest, role: 'OWNER' | 'RENTER'
   if (s === 'ACTIVE' || s === 'RETURN_PENDING') a.push('RETURN');
   if (s === 'DISPUTED' && !rental.returnedAt) a.push('RETURN');
   if (s === 'RETURNED' && role === 'OWNER') a.push('COMPLETE');
-  if (['ACCEPTED', 'ACTIVE', 'RETURN_PENDING', 'RETURNED', 'DISPUTED', 'COMPLETED'].includes(s)) a.push('REPORT');
+  if (['ACCEPTED', 'ACTIVE', 'RETURN_PENDING', 'RETURNED', 'DISPUTED', 'COMPLETED'].includes(s) && isWithinReportWindow(rental)) {
+    a.push('REPORT');
+  }
   if (s === 'COMPLETED') a.push('REVIEW');
   return a;
 };

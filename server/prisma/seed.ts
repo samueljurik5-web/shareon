@@ -5,7 +5,7 @@ import { calculateRentalPrice } from '../src/services/pricing.js';
 import { resolvePeriod } from '../src/services/availability.js';
 import { addDaysToDate, todayLocal } from '../src/lib/time.js';
 import { DEFAULT_SETTINGS } from '../src/services/settings.js';
-import { DEMO_DATA_VERSION, DEMO_OWNER_DISTRICTS } from './demo-data.js';
+import { DEMO_DATA_VERSION, DEMO_OWNER_DISTRICTS, DEMO_PRICES } from './demo-data.js';
 
 const prisma = new PrismaClient();
 
@@ -38,9 +38,6 @@ type SeedItem = {
   title: string;
   category: Category;
   description: string;
-  price: number | null;
-  /** € per hour – enables hourly rental */
-  hourly?: number;
   bufferHours?: number;
   value: number;
   condition: ItemCondition;
@@ -48,21 +45,21 @@ type SeedItem = {
 };
 
 const items: SeedItem[] = [
-  { owner: 0, title: 'Benzínová kosačka na trávu', category: 'GARDEN', description: 'Spoľahlivá benzínová kosačka so záberom 46 cm a košom na trávu. Vhodná pre záhradu do 800 m².', price: 12, value: 280, condition: 'VERY_GOOD', image: '/placeholders/garden.svg' },
-  { owner: 0, title: 'Plotostrih aku 18V', category: 'GARDEN', description: 'Akumulátorový plotostrih s dĺžkou lišty 55 cm, batéria a nabíjačka v cene.', price: 7, hourly: 2, value: 120, condition: 'GOOD', image: '/placeholders/garden-2.svg' },
-  { owner: 6, title: 'Vertikutátor elektrický', category: 'GARDEN', description: 'Elektrický vertikutátor na prevzdušnenie trávnika, záber 32 cm, kôš 30 l.', price: null, hourly: 3, value: 150, condition: 'GOOD', image: '/placeholders/garden.svg' },
-  { owner: 6, title: 'Záhradný drvič konárov', category: 'GARDEN', description: 'Drvič konárov do priemeru 40 mm. Ideálny na jarné strihanie stromov.', price: 15, value: 350, condition: 'USED', image: '/placeholders/garden-2.svg' },
-  { owner: 1, title: 'Príklepová vŕtačka Bosch-like 750W', category: 'WORKSHOP', description: 'Výkonná príklepová vŕtačka 750 W, sada vrtákov do betónu a dreva v kufri.', price: 8, hourly: 3, bufferHours: 1, value: 100, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
-  { owner: 1, title: 'Kotúčová píla 1400W', category: 'WORKSHOP', description: 'Ručná kotúčová píla s vodiacou lištou, hĺbka rezu 65 mm. Kotúč na drevo vymenený.', price: 10, value: 190, condition: 'GOOD', image: '/placeholders/workshop-2.svg' },
-  { owner: 1, title: 'Tlakový čistič 140 bar', category: 'WORKSHOP', description: 'Vysokotlakový čistič na terasy, autá a fasády. Hadica 8 m, rotačná tryska.', price: 11, hourly: 4, bufferHours: 1, value: 220, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
-  { owner: 1, title: 'Hliníkový rebrík 3×9', category: 'WORKSHOP', description: 'Trojdielny kombinovaný rebrík, max. pracovná výška 6,5 m. Drobné škrabance.', price: 8, value: 160, condition: 'WORN', image: '/placeholders/workshop-2.svg' },
-  { owner: 2, title: 'Paddleboard nafukovací 320 cm', category: 'SPORT', description: 'Nafukovací paddleboard s pádlom, pumpou a batohom. Nosnosť 120 kg.', price: 14, value: 400, condition: 'VERY_GOOD', image: '/placeholders/sport.svg' },
-  { owner: 2, title: 'Horský bicykel 29" veľkosť L', category: 'SPORT', description: 'Hardtail MTB, hydraulické brzdy, 1×12 prevodovka. Prilba na požiadanie.', price: 16, value: 650, condition: 'GOOD', image: '/placeholders/sport-2.svg' },
-  { owner: 3, title: 'Bežky s viazaním, veľ. 190 cm', category: 'SPORT', description: 'Klasické bežecké lyže s viazaním NNN, palice v cene. Topánky veľkosť 43.', price: 8, value: 180, condition: 'USED', image: '/placeholders/sport.svg' },
-  { owner: 3, title: 'Stan pre 4 osoby', category: 'LEISURE', description: 'Rodinný stan s predsieňou, vodný stĺpec 3000 mm. Vhodný na kempovanie.', price: 9, value: 210, condition: 'VERY_GOOD', image: '/placeholders/leisure.svg' },
-  { owner: 4, title: 'Prenosný projektor + plátno', category: 'ELECTRONICS', description: 'Full HD projektor s plátnom 100", ideálny na letné kino na záhrade.', price: 13, hourly: 5, value: 300, condition: 'GOOD', image: '/placeholders/leisure-2.svg' },
-  { owner: 4, title: 'Detský bicyklový vozík', category: 'LEISURE', description: 'Vozík za bicykel pre 2 deti, s pláštenkou a vlajočkou. Dá sa použiť aj ako kočík.', price: 10, value: 250, condition: 'GOOD', image: '/placeholders/leisure.svg' },
-  { owner: 5, title: 'Plynový gril s 3 horákmi', category: 'HOUSEHOLD', description: 'Plynový gril s tromi horákmi a bočnou platňou, bez plynovej fľaše.', price: 12, value: 330, condition: 'NEW', image: '/placeholders/other.svg' },
+  { owner: 0, title: 'Benzínová kosačka na trávu', category: 'GARDEN', description: 'Spoľahlivá benzínová kosačka so záberom 46 cm a košom na trávu. Vhodná pre záhradu do 800 m².', value: 280, condition: 'VERY_GOOD', image: '/placeholders/garden.svg' },
+  { owner: 0, title: 'Plotostrih aku 18V', category: 'GARDEN', description: 'Akumulátorový plotostrih s dĺžkou lišty 55 cm, batéria a nabíjačka v cene.', value: 120, condition: 'GOOD', image: '/placeholders/garden-2.svg' },
+  { owner: 6, title: 'Vertikutátor elektrický', category: 'GARDEN', description: 'Elektrický vertikutátor na prevzdušnenie trávnika, záber 32 cm, kôš 30 l.', value: 150, condition: 'GOOD', image: '/placeholders/garden.svg' },
+  { owner: 6, title: 'Záhradný drvič konárov', category: 'GARDEN', description: 'Drvič konárov do priemeru 40 mm. Ideálny na jarné strihanie stromov.', value: 350, condition: 'USED', image: '/placeholders/garden-2.svg' },
+  { owner: 1, title: 'Príklepová vŕtačka Bosch-like 750W', category: 'WORKSHOP', description: 'Výkonná príklepová vŕtačka 750 W, sada vrtákov do betónu a dreva v kufri.', bufferHours: 1, value: 100, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
+  { owner: 1, title: 'Kotúčová píla 1400W', category: 'WORKSHOP', description: 'Ručná kotúčová píla s vodiacou lištou, hĺbka rezu 65 mm. Kotúč na drevo vymenený.', value: 190, condition: 'GOOD', image: '/placeholders/workshop-2.svg' },
+  { owner: 1, title: 'Tlakový čistič 140 bar', category: 'WORKSHOP', description: 'Vysokotlakový čistič na terasy, autá a fasády. Hadica 8 m, rotačná tryska.', bufferHours: 1, value: 220, condition: 'VERY_GOOD', image: '/placeholders/workshop.svg' },
+  { owner: 1, title: 'Hliníkový rebrík 3×9', category: 'WORKSHOP', description: 'Trojdielny kombinovaný rebrík, max. pracovná výška 6,5 m. Drobné škrabance.', value: 160, condition: 'WORN', image: '/placeholders/workshop-2.svg' },
+  { owner: 2, title: 'Paddleboard nafukovací 320 cm', category: 'SPORT', description: 'Nafukovací paddleboard s pádlom, pumpou a batohom. Nosnosť 120 kg.', value: 400, condition: 'VERY_GOOD', image: '/placeholders/sport.svg' },
+  { owner: 2, title: 'Horský bicykel 29" veľkosť L', category: 'SPORT', description: 'Hardtail MTB, hydraulické brzdy, 1×12 prevodovka. Prilba na požiadanie.', value: 650, condition: 'GOOD', image: '/placeholders/sport-2.svg' },
+  { owner: 3, title: 'Bežky s viazaním, veľ. 190 cm', category: 'SPORT', description: 'Klasické bežecké lyže s viazaním NNN, palice v cene. Topánky veľkosť 43.', value: 180, condition: 'USED', image: '/placeholders/sport.svg' },
+  { owner: 3, title: 'Stan pre 4 osoby', category: 'LEISURE', description: 'Rodinný stan s predsieňou, vodný stĺpec 3000 mm. Vhodný na kempovanie.', value: 210, condition: 'VERY_GOOD', image: '/placeholders/leisure.svg' },
+  { owner: 4, title: 'Prenosný projektor + plátno', category: 'ELECTRONICS', description: 'Full HD projektor s plátnom 100", ideálny na letné kino na záhrade.', value: 300, condition: 'GOOD', image: '/placeholders/leisure-2.svg' },
+  { owner: 4, title: 'Detský bicyklový vozík', category: 'LEISURE', description: 'Vozík za bicykel pre 2 deti, s pláštenkou a vlajočkou. Dá sa použiť aj ako kočík.', value: 250, condition: 'GOOD', image: '/placeholders/leisure.svg' },
+  { owner: 5, title: 'Plynový gril s 3 horákmi', category: 'HOUSEHOLD', description: 'Plynový gril s tromi horákmi a bočnou platňou, bez plynovej fľaše.', value: 330, condition: 'NEW', image: '/placeholders/other.svg' },
 ];
 
 const main = async () => {
@@ -109,10 +106,11 @@ const main = async () => {
         title: x.title,
         category: x.category,
         description: x.description,
-        dailyRentalEnabled: x.price != null,
-        dailyPriceCents: x.price != null ? x.price * 100 : null,
-        hourlyRentalEnabled: x.hourly != null,
-        hourlyPriceCents: x.hourly != null ? x.hourly * 100 : null,
+        // Prices: DEMO_PRICES (prisma/demo-data.ts) – every demo item can be rented per hour and per day.
+        dailyRentalEnabled: true,
+        dailyPriceCents: DEMO_PRICES[x.title].daily * 100,
+        hourlyRentalEnabled: true,
+        hourlyPriceCents: DEMO_PRICES[x.title].hourly * 100,
         minRentalHours: 1,
         maxRentalHours: 10,
         availableFromTime: '08:00',
@@ -124,7 +122,6 @@ const main = async () => {
         condition: x.condition,
         availableFrom: d(-120),
         availableTo: d(240),
-        protectionEligible: idx !== 7, // the worn ladder is not eligible for protection
         declarationsAcceptedAt: new Date(),
         createdAt: new Date(Date.now() - (items.length - idx) * 36e5 * 20),
         images: { create: [{ url: x.image, position: 0 }] },
@@ -178,15 +175,13 @@ const main = async () => {
         handoverMethod: 'PERSONAL_PICKUP',
         status: spec.status,
         pricePerUnitCents: price.pricePerUnitCents,
-        refundableCents: price.refundableCents,
         rentalPriceCents: price.rentalPriceCents,
         protectionFeeCents: price.protectionFeeCents,
-        depositCents: price.depositCents,
         platformFeeCents: price.platformFeeCents,
         totalCents: price.totalCents,
-        protectionMode: price.protectionMode,
+        protectionMode: 'PROTECTION_FEE',
         rulesAcceptedAt: d(spec.start - 3),
-        protectionDisclaimerAcceptedAt: price.protectionFeeCents > 0 ? d(spec.start - 3) : null,
+        protectionDisclaimerAcceptedAt: d(spec.start - 3),
         acceptedAt: accepted ? d(spec.start - 2) : null,
         rejectedAt: spec.status === 'REJECTED' ? new Date() : null,
         ownerNote: spec.status === 'REJECTED' ? 'Prepáčte, gril bude v tom termíne u mňa.' : null,
@@ -198,7 +193,7 @@ const main = async () => {
     });
     rentals.push(rental);
 
-    if (price.protection?.available) {
+    {
       await prisma.protectionQuote.create({
         data: {
           itemId: item.id,
@@ -228,23 +223,11 @@ const main = async () => {
             status: done ? 'EXPIRED' : spec.status === 'DISPUTED' ? 'CLAIM_UNDER_REVIEW' : 'ACTIVE',
             isDemo: true,
             feeCents: price.protectionFeeCents,
-            protectedValueCents: price.protection!.protectedValueCents,
+            protectedValueCents: price.protection.protectedValueCents,
             idempotencyKey: `rental:${rental.id}:protection`,
           },
         });
       }
-      await prisma.deposit.create({
-        data: {
-          rentalRequestId: rental.id,
-          amountCents: price.depositCents,
-          status: done ? 'RELEASED' : spec.status === 'DISPUTED' ? 'DISPUTED' : 'HELD',
-          provider: 'mock',
-          isSimulated: true,
-          idempotencyKey: `rental:${rental.id}:deposit`,
-          heldAt: d(spec.start - 2),
-          releasedAt: done ? d(spec.end) : null,
-        },
-      });
     }
     if (['ACTIVE', 'COMPLETED', 'DISPUTED'].includes(spec.status)) {
       for (const role of ['OWNER', 'RENTER'] as const) {
@@ -307,7 +290,6 @@ const main = async () => {
       reportedUserId: disputed.renterId,
       type: 'ITEM_DAMAGED',
       description: 'Po vrátení som zistil prasklinu na ochrannom kryte kotúča. Pred požičaním bol kryt v poriadku (viď fotky pri odovzdaní).',
-      requestedAmountCents: 4500,
       status: 'UNDER_REVIEW',
       evidence: {
         create: [

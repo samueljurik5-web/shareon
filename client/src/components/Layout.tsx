@@ -1,4 +1,4 @@
-import { Bell, Home, MapPin, Plus, Search, ClipboardList, User, ShieldCheck, LogOut, Settings } from 'lucide-react';
+import { Bell, Home, MapPin, MessageSquare, Plus, Search, ClipboardList, User, ShieldCheck, LogOut, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
@@ -23,9 +23,10 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Pages with an #anchor scroll to it themselves (e.g. /ako-to-funguje#kontakt).
+  // New page → top; with an #anchor (e.g. /#spatna-vazba, /ako-to-funguje#kontakt) → that section.
   useEffect(() => {
-    if (!location.hash) window.scrollTo(0, 0);
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
+    else window.scrollTo(0, 0);
   }, [location.pathname, location.hash]);
 
   return (
@@ -83,6 +84,7 @@ export function Layout() {
           <Link to="/ako-to-funguje" className="hover:text-ink">Ako to funguje</Link>
           <Link to="/protection" className="hover:text-ink">Ochrana prenájmu</Link>
           <Link to="/ako-to-funguje#kontakt" className="hover:text-ink">Kontakt</Link>
+          <Link to="/#spatna-vazba" className="hover:text-ink">Spätná väzba</Link>
           {INSTAGRAM_URL ? (
             <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="hover:text-ink">Instagram</a>
           ) : (
@@ -90,7 +92,7 @@ export function Layout() {
           )}
         </nav>
         <p className="px-4">
-          ShareOn MVP · Košice · Ochrana prenájmu nie je poistenie · Platby sú v MVP simulované
+          ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
           <span className="mx-2">·</span>
           <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
         </p>
@@ -199,6 +201,7 @@ export function AdminNav() {
     { to: '/admin/users', label: 'Používatelia', icon: User },
     { to: '/admin/items', label: 'Predmety', icon: ClipboardList },
     { to: '/admin/reports', label: 'Hlásenia', icon: Bell },
+    { to: '/admin/feedback', label: 'Spätná väzba', icon: MessageSquare },
     { to: '/admin/settings', label: 'Nastavenia', icon: Settings },
   ];
   return (

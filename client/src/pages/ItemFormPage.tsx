@@ -35,7 +35,6 @@ interface FormState {
   availableTo: string;
   replacementValue: string;
   serialNote: string;
-  protectionEligible: boolean;
   images: string[];
 }
 
@@ -56,7 +55,7 @@ export function ItemFormPage() {
     title: '', category: 'GARDEN', description: '', city: user?.city ?? 'Košice', district: '', condition: 'GOOD',
     rentalAvailability: 'DAILY', dailyPrice: '', hourlyPrice: '', minRentalHours: '1', maxRentalHours: '8', minRentalDays: '1', maxRentalDays: '14',
     availableFromTime: '08:00', availableToTime: '20:00', bufferHours: '0',
-    availableFrom: todayIso(), availableTo: addDaysIso(todayIso(), 90), replacementValue: '', serialNote: '', protectionEligible: true, images: [],
+    availableFrom: todayIso(), availableTo: addDaysIso(todayIso(), 90), replacementValue: '', serialNote: '', images: [],
   });
   const [decl, setDecl] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -83,7 +82,7 @@ export function ItemFormPage() {
           minRentalDays: String(item.minRentalDays), maxRentalDays: String(item.maxRentalDays),
           availableFromTime: item.availableFromTime, availableToTime: item.availableToTime, bufferHours: String(item.bufferHours),
           condition: item.condition, availableFrom: item.availableFrom, availableTo: item.availableTo, replacementValue: String(item.replacementValueCents / 100),
-          serialNote: item.serialNote ?? '', protectionEligible: item.protectionEligible, images: item.images.map((i) => i.url),
+          serialNote: item.serialNote ?? '', images: item.images.map((i) => i.url),
         });
       })
       .catch((e) => setLoadError(e instanceof ApiError ? e.message : 'Chyba'))
@@ -97,7 +96,7 @@ export function ItemFormPage() {
   // Live server-side estimates (3 days / a few hours) – shown to the owner before publishing.
   useEffect(() => {
     const value = num(form.replacementValue);
-    const base = { category: form.category, replacementValue: value, protectionEligible: form.protectionEligible };
+    const base = { category: form.category, replacementValue: value };
     const t = setTimeout(() => {
       if (daily && num(form.dailyPrice) && value) {
         post<{ price: Price }>('/api/protection/quote', { ...base, rentalMode: 'DAILY', pricePerDay: num(form.dailyPrice), rentalDays: 3 })
@@ -113,7 +112,7 @@ export function ItemFormPage() {
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.category, form.dailyPrice, form.hourlyPrice, form.replacementValue, form.protectionEligible, form.rentalAvailability, form.minRentalHours, form.maxRentalHours]);
+  }, [form.category, form.dailyPrice, form.hourlyPrice, form.replacementValue, form.rentalAvailability, form.minRentalHours, form.maxRentalHours]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -145,7 +144,6 @@ export function ItemFormPage() {
       availableTo: form.availableTo,
       availableFromTime: form.availableFromTime,
       availableToTime: form.availableToTime,
-      protectionEligible: form.protectionEligible,
       images: form.images,
       dailyRentalEnabled: daily,
       hourlyRentalEnabled: hourly,
@@ -201,7 +199,7 @@ export function ItemFormPage() {
             </SelectField>
           </div>
           <TextArea id="description" label="Popis" value={form.description} onChange={(e) => set('description', e.target.value)} error={errors.description} maxLength={3000} hint="Uveď príslušenstvo, rozmery a prípadné poškodenia." />
-          <TextField id="replacementValue" label="Odhadovaná hodnota predmetu (€)" inputMode="decimal" value={form.replacementValue} onChange={(e) => set('replacementValue', e.target.value)} error={errors.replacementValue} hint="Slúži na výpočet kaucie a ochrany." />
+          <TextField id="replacementValue" label="Odhadovaná hodnota predmetu (€)" inputMode="decimal" value={form.replacementValue} onChange={(e) => set('replacementValue', e.target.value)} error={errors.replacementValue} hint="Pomáha pri posúdení prípadnej škody. Nájomca neplatí žiadnu kauciu." />
           <div className="grid gap-4 sm:grid-cols-3">
             <TextField id="city" label="Mesto" value={form.city} onChange={(e) => set('city', e.target.value)} error={errors.city} />
             <TextField id="availableFrom" type="date" label="Dostupné od" value={form.availableFrom} onChange={(e) => set('availableFrom', e.target.value)} error={errors.availableFrom} />
@@ -213,9 +211,6 @@ export function ItemFormPage() {
           </SelectField>
           <p className="-mt-2 text-xs text-ink-3">Pri predmete sa zobrazí len orientačná vzdialenosť od centra Košíc – nikdy nie tvoja adresa.</p>
           <TextField id="serialNote" label="Sériové číslo alebo identifikačná poznámka (nepovinné)" value={form.serialNote} onChange={(e) => set('serialNote', e.target.value)} hint="Zobrazí sa len tebe a administrátorovi." maxLength={200} />
-          <Checkbox id="protectionEligible" checked={form.protectionEligible} onChange={(v) => set('protectionEligible', v)}>
-            Ponúknuť Ochranu prenájmu (ak je pre kategóriu dostupná)
-          </Checkbox>
         </div>
         <fieldset className="card space-y-4 p-5">
           <legend className="sr-only">Spôsob prenájmu</legend>
@@ -272,20 +267,20 @@ export function ItemFormPage() {
           {estimateHourly && (
             <>
               <h3 className="text-sm font-semibold text-ink-2">Na hodiny ({hoursLabel(estimateHourly.units)})</h3>
-              <PriceBreakdown {...estimateHourly} isDemo={estimateHourly.protection?.isDemo} />
+              <PriceBreakdown {...estimateHourly} />
             </>
           )}
           {estimate && (
             <>
               <h3 className="text-sm font-semibold text-ink-2">Na dni ({daysLabel(estimate.units)})</h3>
-              <PriceBreakdown {...estimate} isDemo={estimate.protection?.isDemo} />
+              <PriceBreakdown {...estimate} />
             </>
           )}
           {!estimate && !estimateHourly && <p className="text-sm text-ink-3">Zadaj cenu a hodnotu predmetu.</p>}
-          {(estimate?.protectionAvailable || estimateHourly?.protectionAvailable) && <ProtectionNotice compact />}
+          {(estimate || estimateHourly) && <ProtectionNotice />}
           <p className="text-xs text-ink-3">
             Zverejnením inzerátu potvrdzuješ, že dodržiavaš pravidlá ShareOn. ShareOn je sprostredkovateľská platforma a nie je stranou zmluvy o požičaní.
-            Ochrana prenájmu nie je poistenie a nekryje automaticky žiadne škody. Platby a kaucie sú v MVP simulované.
+            Každý prenájom je bez kaucie a s Ochranou prenájmu v cene (10 % z ceny prenájmu, 0,50 – 5 €), ktorú platí nájomca.
           </p>
           <button type="submit" className="btn btn-primary w-full" disabled={submitting}>
             {submitting ? 'Ukladám…' : isEdit ? 'Uložiť zmeny' : 'Zverejniť predmet'}

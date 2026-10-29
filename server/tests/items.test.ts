@@ -30,7 +30,6 @@ describe('items', () => {
     expect(detail.body.item.owner.id).toBe(user.id);
     expect(detail.body.item.owner.phone).toBeUndefined();
     expect(detail.body.item.owner.email).toBeUndefined();
-    expect(detail.body.item.protectionAvailable).toBe(true);
   });
 
   it('requires all owner declarations', async () => {
@@ -77,12 +76,12 @@ describe('items', () => {
     expect(list.body.items.map((i: { id: string }) => i.id)).toContain(res.body.item.id);
   });
 
-  it('PATCH does not reset unrelated fields (e.g. protection eligibility)', async () => {
+  it('PATCH does not reset unrelated fields (e.g. condition, prices)', async () => {
     const owner = await createUser();
-    const item = await createItem(owner.user.id, { protectionEligible: false });
+    const item = await createItem(owner.user.id, { dailyPriceCents: 1200 });
     await api().patch(`/api/items/${item.id}`).set(owner.auth).send({ title: 'Nový názov predmetu' }).expect(200);
     const detail = await api().get(`/api/items/${item.id}`).expect(200);
-    expect(detail.body.item.protectionEligible).toBe(false);
+    expect(detail.body.item).toMatchObject({ title: 'Nový názov predmetu', condition: 'GOOD', dailyPriceCents: 1200 });
   });
 
   it('requires authentication to create', async () => {

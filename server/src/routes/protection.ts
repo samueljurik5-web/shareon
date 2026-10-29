@@ -10,7 +10,7 @@ import { conflict, notFound } from '../lib/errors.js';
 import { CATEGORIES, getSettings } from '../services/settings.js';
 import { calculateRentalPrice } from '../services/pricing.js';
 import { createProtectionForRental, loadRentalForParty, quoteRental, saveProtectionQuote } from '../services/rentals.js';
-import { getProtectionProvider, DEMO_LABEL, DEMO_NOTICE_SK, PROTECTION_NOTICE, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
+import { getProtectionProvider, PROTECTION_FEE_HINT_SK, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
 import { audit } from '../services/audit.js';
 
 const router = Router();
@@ -27,7 +27,6 @@ const quoteSchema = z.union([
     replacementValue: euroAmount('Hodnota predmetu', 20000),
     rentalDays: z.coerce.number().int().min(1).max(90).default(3),
     rentalHours: z.coerce.number().min(0.25).max(24).default(4),
-    protectionEligible: z.boolean().default(true),
   }),
 ]);
 
@@ -35,12 +34,7 @@ const quoteSchema = z.union([
 router.post('/quote', optionalAuth, async (req, res) => {
   const data = parseBody(quoteSchema, req);
   const settings = await getSettings();
-  const notices = {
-    notice: PROTECTION_NOTICE,
-    noticeSk: PROTECTION_NOTICE_SK,
-    demoLabel: DEMO_LABEL,
-    demoNotice: DEMO_NOTICE_SK,
-  };
+  const notices = { noticeSk: PROTECTION_NOTICE_SK, hint: PROTECTION_FEE_HINT_SK };
   if ('itemId' in data) {
     const item = await prisma.item.findUnique({ where: { id: data.itemId }, include: { owner: { select: { isActive: true } } } });
     if (!item || !item.isActive) throw notFound('Predmet sa nenašiel.');
@@ -61,7 +55,6 @@ router.post('/quote', optionalAuth, async (req, res) => {
       dailyPriceCents: data.pricePerDay != null ? toCents(data.pricePerDay) : null,
       hourlyPriceCents: data.pricePerHour != null ? toCents(data.pricePerHour) : null,
       replacementValueCents: toCents(data.replacementValue),
-      protectionEligible: data.protectionEligible,
     },
     hourly ? { mode: 'HOURLY', minutes: Math.round(data.rentalHours * 60) } : { mode: 'DAILY', days: data.rentalDays },
     settings,
@@ -86,7 +79,7 @@ router.get('/:rentalRequestId', requireAuth, async (req, res) => {
     prisma.protectionQuote.findMany({ where: { rentalRequestId: rental.id }, orderBy: { createdAt: 'desc' } }),
   ]);
   res.json({
-    protection: record ? { ...record, label: record.isDemo ? DEMO_LABEL : null } : null,
+    protection: record,
     quotes,
     notice: PROTECTION_NOTICE_SK,
   });
@@ -96,8 +89,7 @@ router.post('/:id/cancel', requireAuth, requireAdmin, async (req, res) => {
   const admin = currentUser(req);
   const record = await prisma.protectionRecord.findUnique({ where: { id: param(req, 'id') } });
   if (!record) throw notFound('Záznam ochrany sa nenašiel.');
-  const settings = await getSettings();
-  await getProtectionProvider(settings).cancelProtection(record.id);
+  await getProtectionProvider().cancelProtection(record.id);
   const updated = await prisma.protectionRecord.findUniqueOrThrow({ where: { id: record.id } });
   await audit({ adminId: admin.id, action: 'PROTECTION_CANCELLED', entityType: 'ProtectionRecord', entityId: record.id, oldValue: { status: record.status }, newValue: { status: updated.status } });
   res.json({ protection: updated });

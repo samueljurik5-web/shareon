@@ -2,7 +2,7 @@ import type { Category } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { badRequest } from '../lib/errors.js';
 import type { AppSettings } from './settings.js';
-import { getProtectionProvider, isProtectionAvailableFor } from './protection/index.js';
+import { getProtectionProvider } from './protection/index.js';
 import type { ProtectionQuote, RentalDuration, RiskSignals } from './protection/index.js';
 
 export interface PricingItem {
@@ -10,7 +10,6 @@ export interface PricingItem {
   hourlyPriceCents: number | null;
   replacementValueCents: number;
   category: Category;
-  protectionEligible: boolean;
 }
 
 /**
@@ -29,26 +28,15 @@ export interface PriceBreakdown {
   pricePerUnitCents: number;
   /** Non-refundable rental price = units × pricePerUnit */
   rentalPriceCents: number;
-  /** Non-refundable protection fee (NOT insurance) */
+  /** Ochrana prenájmu – included in every rental (10 %, 0,50–5,00 €) */
   protectionFeeCents: number;
-  /** Refundable deposit (simulated in MVP) */
-  depositCents: number;
   /** Platform fee – 0 unless enabled in settings */
   platformFeeCents: number;
+  /** rental + Ochrana prenájmu + platform fee. There is no deposit in ShareOn. */
   totalCents: number;
-  /** Returned to the renter when nothing is withheld (= deposit) */
-  refundableCents: number;
   currency: 'EUR';
-  protectionMode: AppSettings['protectionMode'];
-  protectionAvailable: boolean;
-  protection: ProtectionQuote | null;
+  protection: ProtectionQuote;
 }
-
-/** Deposit = depositPercentage × replacement value, rounded to whole euros, capped. Same for both modes. */
-export const calculateDeposit = (replacementValueCents: number, settings: AppSettings): number => {
-  const raw = Math.round((replacementValueCents * settings.depositPercentage) / 100) * 100;
-  return Math.max(0, Math.min(raw, settings.maxDepositCents));
-};
 
 export const calculatePlatformFee = (rentalPriceCents: number, settings: AppSettings): number =>
   settings.platformFeeEnabled ? Math.round(rentalPriceCents * settings.platformFeePercentage) : 0;
@@ -107,18 +95,14 @@ export const calculateRentalPrice = async (
     ? Math.round((duration.minutes * pricePerUnitCents) / 60)
     : duration.days * pricePerUnitCents;
 
-  const protectionAvailable = isProtectionAvailableFor(settings, item);
-  let protection: ProtectionQuote | null = null;
-  if (protectionAvailable) {
-    protection = await getProtectionProvider(settings).getQuote({
-      replacementValueCents: item.replacementValueCents,
-      category: item.category,
-      duration,
-      riskSignals,
-    });
-  }
-  const protectionFeeCents = protection?.available ? protection.feeCents : 0;
-  const depositCents = calculateDeposit(item.replacementValueCents, settings);
+  const protection = await getProtectionProvider().getQuote({
+    rentalPriceCents,
+    replacementValueCents: item.replacementValueCents,
+    category: item.category,
+    duration,
+    riskSignals,
+  });
+  const protectionFeeCents = protection.feeCents;
   const platformFeeCents = calculatePlatformFee(rentalPriceCents, settings);
   return {
     rentalMode: duration.mode,
@@ -129,13 +113,9 @@ export const calculateRentalPrice = async (
     pricePerUnitCents,
     rentalPriceCents,
     protectionFeeCents,
-    depositCents,
     platformFeeCents,
-    totalCents: rentalPriceCents + protectionFeeCents + depositCents + platformFeeCents,
-    refundableCents: depositCents,
+    totalCents: rentalPriceCents + protectionFeeCents + platformFeeCents,
     currency: 'EUR',
-    protectionMode: protectionAvailable ? settings.protectionMode : 'NONE',
-    protectionAvailable: Boolean(protection?.available),
     protection,
   };
 };

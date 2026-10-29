@@ -6,7 +6,7 @@ accepted for listing inputs (price per day, replacement value, requested/approve
 prices and fees are computed on the server.
 
 Errors: `{ "error": { "code": "BAD_REQUEST", "message": "Slovak message", "details": [{ "path": "email", "message": "…" }] } }`
-Status codes: 400 validation · 401 not logged in · 403 forbidden · 404 not found · 409 conflict/state · 429 rate limited · 501 insurance not available.
+Status codes: 400 validation · 401 not logged in · 403 forbidden · 404 not found · 409 conflict/state · 429 rate limited.
 
 Legend: 🔓 public · 🔑 logged in · 👑 admin
 
@@ -36,15 +36,17 @@ Items can be rented **na dni (DAILY)**, **na hodiny (HOURLY)** or both (`dailyRe
 - Times are Europe/Bratislava wall-clock time; each rental also stores its exact UTC interval (`startAt`, `endAt`).
 - Overlaps are checked against reserved rentals (ACCEPTED…DISPUTED) **including `bufferHours`** on both sides.
 - Prices (all server-side): hourly `rentalPrice = minutes × pricePerHour / 60`, daily `rentalPrice = days × pricePerDay`;
-  `total = rentalPrice + protectionFee + deposit + platformFee`; `refundable = deposit`.
-- Demo protection fee: daily `max(1.50 €, value × 2 %) × (1 + max(0, days − 3) × 0.05)`;
-  hourly `max(1.50 €, value × 2 % × min(1, hours / 24))` – internal demo calculation, **not insurance**.
+  `total = rentalPrice + protectionFee + platformFee`. **There is no deposit** (legacy `depositCents`/`refundableCents`
+  columns are always 0 for new rentals and are never returned).
+- **Ochrana prenájmu** is included in every rental (hourly and daily): `protectionFee = clamp(round(rentalPrice × 10 %), 0,50 €, 5,00 €)`.
+  Examples: 5 € → 0,50 € (5,50 €), 12 € → 1,20 € (13,20 €), 30 € → 3,00 € (33,00 €), 80 € → 5,00 € (85,00 €), 120 € → 5,00 € (125,00 €).
+  It is an internal ShareOn mechanism; compensation is never automatic. Payments are simulated in the MVP.
 
 | Method | Path | | |
 |---|---|---|---|
 | POST | `/pricing/quote` | 🔓 | `{ itemId, rentalMode: DAILY\|HOURLY, startDate, endDate? (daily), startTime?, endTime? (hourly, HH:MM) }` → `{ quote: { available, period: { …, label }, price } }`. Validates mode, past dates, availability window, hours/min/max, overlaps + buffer. **Read-only – never creates a rental request.** 400/409 with a Slovak message when not available. |
 
-`price` = `{ rentalMode, durationMinutes, durationDays, units, unit, pricePerUnitCents, rentalPriceCents, protectionFeeCents, depositCents, platformFeeCents, totalCents, refundableCents, protection, … }`
+`price` = `{ rentalMode, durationMinutes, durationDays, units, unit, pricePerUnitCents, rentalPriceCents, protectionFeeCents, platformFeeCents, totalCents, currency, protection }`
 
 ## Items
 | Method | Path | | |
@@ -70,41 +72,35 @@ Categories: `GARDEN, SPORT, WORKSHOP, LEISURE, OTHER` · Conditions: `NEW, VERY_
 | POST | `/rental-requests` | 🔑 | `{ itemId, rentalMode, startDate, endDate? \| startTime+endTime, message?, handoverMethod: PERSONAL_PICKUP\|OWNER_DELIVERY\|MEET_ELSEWHERE, acceptRules: true, acceptProtectionDisclaimer }` – availability and all amounts recalculated server-side; client prices/durations ignored |
 | GET | `/rental-requests/sent` | 🔑 | As renter |
 | GET | `/rental-requests/received` | 🔑 | As owner |
-| GET | `/rental-requests/:id` | 🔑 party/👑 | Full detail, price snapshot, protection, deposit, handover records, `availableActions`, contact details only from ACCEPTED on |
+| GET | `/rental-requests/:id` | 🔑 party/👑 | Full detail, price snapshot (`{ pricePerUnitCents, rentalPriceCents, protectionFeeCents, platformFeeCents, totalCents }`), protection, handover records, `availableActions`, contact details only from ACCEPTED on |
 | PATCH | `/rental-requests/:id/status` | 🔑 party | `{ action }` – see table below |
 | POST | `/rental-requests/:id/handover` | 🔑 party | `{ note?, photos[] }` – owner = handover with condition photos, renter = receipt. Both → `ACTIVE` |
 | POST | `/rental-requests/:id/return` | 🔑 party | `{ note?, photos[], itemOk (owner, required) }` – both → `COMPLETED` (itemOk) or `RETURNED` |
-| POST | `/rental-requests/:id/dispute` | 🔑 party | `{ type, description, requestedAmount, photos[] }` → creates report, rental `DISPUTED`, deposit `DISPUTED` |
+| POST | `/rental-requests/:id/dispute` | 🔑 party | `{ type, description, photos[], contactNote? }` → creates a claim (report), rental `DISPUTED`. Allowed from ACCEPTED until **48 h after the return** |
 
 Status actions:
 | action | who | from | to |
 |---|---|---|---|
-| `ACCEPT` | owner | PENDING | ACCEPTED (+ protection record, simulated deposit HELD) |
+| `ACCEPT` | owner | PENDING | ACCEPTED (+ Ochrana prenájmu record ACTIVE; no deposit) |
 | `REJECT` | owner | PENDING | REJECTED |
 | `PROPOSE_DATES` `{startDate, endDate (daily) \| startTime+endTime (hourly), note?}` | owner | PENDING | PENDING (proposal stored) |
 | `ACCEPT_PROPOSAL` | renter | PENDING + proposal | ACCEPTED (re-priced) |
 | `DECLINE_PROPOSAL` | renter | PENDING + proposal | PENDING |
-| `CANCEL` | renter (PENDING) / either (ACCEPTED) | | CANCELLED (protection cancelled, deposit released) |
-| `COMPLETE` | owner | RETURNED | COMPLETED (deposit released) |
+| `CANCEL` | renter (PENDING) / either (ACCEPTED) | | CANCELLED (protection cancelled) |
+| `COMPLETE` | owner | RETURNED | COMPLETED |
 
 ## Protection
 | Method | Path | | |
 |---|---|---|---|
-| POST | `/protection/quote` | 🔓 | `{ itemId, startDate, endDate }` (stores a ProtectionQuote) **or** `{ category, pricePerDay, replacementValue, rentalDays, protectionEligible }` (preview) → `{ quoteId, price, notice, demoLabel, … }` |
+| POST | `/protection/quote` | 🔓 | `{ itemId, startDate, endDate }` (stores a ProtectionQuote) **or** `{ category, rentalMode, pricePerDay?, pricePerHour?, replacementValue, rentalDays?, rentalHours? }` (preview for the item form) → `{ quoteId, price, noticeSk, hint }` |
 | POST | `/protection/:rentalRequestId/create` | 🔑 party | Idempotent; returns existing record |
 | GET | `/protection/:rentalRequestId` | 🔑 party | Record + quotes |
 | POST | `/protection/:id/cancel` | 👑 | Audit-logged |
 
-## Deposits (SIMULATED PAYMENT)
+## Feedback
 | Method | Path | | |
 |---|---|---|---|
-| POST | `/deposits/:rentalRequestId/create` | 🔑 party | Idempotent |
-| GET | `/deposits/:rentalRequestId` | 🔑 party | |
-| POST | `/deposits/:id/release` | 🔑 owner (not while DISPUTED) / 👑 | |
-| POST | `/deposits/:id/withhold` | 👑 | `{ amount? }` full or partial *(extra)* |
-
-Deposit transitions: `PENDING→HELD|RELEASED`, `HELD→RELEASE_REQUESTED|RELEASED|DISPUTED|PARTIALLY_WITHHELD|WITHHELD`,
-`RELEASE_REQUESTED→RELEASED|DISPUTED`, `DISPUTED→RELEASED|PARTIALLY_WITHHELD|WITHHELD`; `RELEASED`, `WITHHELD`, `PARTIALLY_WITHHELD`, `NOT_REQUIRED` are terminal.
+| POST | `/feedback` | 🔓 (rate limited 10/h) | `{ type: LIKE\|BUG\|FEATURE\|TESTER, contact? (name or e-mail), message (5–2000) }` – stored, readable by admins only |
 
 ## Reviews
 | Method | Path | | |
@@ -116,24 +112,23 @@ Deposit transitions: `PENDING→HELD|RELEASED`, `HELD→RELEASE_REQUESTED|RELEAS
 ## Reports / disputes
 | Method | Path | | |
 |---|---|---|---|
-| POST | `/reports` | 🔑 party | `{ rentalRequestId, type, description, requestedAmount, photos[] }` |
-| GET | `/reports/:id` | 🔑 participant/👑 | Report, evidence timeline, decisions (internal notes admin-only), disclaimer |
+| POST | `/reports` | 🔑 party | `{ rentalRequestId, type, description, photos[], contactNote? }` – claim; 409 later than 48 h after the return |
+| GET | `/reports/:id` | 🔑 participant/👑 | Claim, evidence timeline, status changes (internal notes admin-only), disclaimer; admins also get `rental` (reservation + contacts) |
 | POST | `/reports/:id/evidence` | 🔑 participant | `{ text?, fileUrl? }` (NEEDS_MORE_INFORMATION → UNDER_REVIEW) |
 | POST | `/reports/:id/response` | 🔑 reported party | `{ text?, fileUrl? }` |
 
-Types: `ITEM_DAMAGED, ITEM_NOT_RETURNED, LATE_RETURN, ITEM_DIFFERENT_THAN_DESCRIPTION, USER_BEHAVIOR, PAYMENT_PROBLEM, OTHER`
+Types offered in the UI: `ITEM_DAMAGED` (Poškodená vec), `ITEM_NOT_RETURNED` (Vec nebola vrátená), `ITEM_DIFFERENT_THAN_DESCRIPTION` (Vec nezodpovedá popisu), `OTHER` (Iný problém); `LATE_RETURN` for overdue rentals. Statuses: `OPEN → UNDER_REVIEW / NEEDS_MORE_INFORMATION → RESOLVED / REJECTED` (legacy `APPROVED`, `PARTIALLY_APPROVED` stay readable).
 
 ## Admin 👑
 | Method | Path | |
 |---|---|---|
 | GET | `/admin/overview` *(extra)* | Counters + warning |
-| GET | `/admin/users`, `/admin/items`, `/admin/rentals`, `/admin/reports`, `/admin/protection`, `/admin/deposits`, `/admin/reviews` *(extra)*, `/admin/audit-log` | `?q=&status=&take=` |
+| GET | `/admin/users`, `/admin/items`, `/admin/rentals`, `/admin/reports`, `/admin/protection`, `/admin/feedback`, `/admin/reviews` *(extra)*, `/admin/audit-log` | `?q=&status=&take=` |
 | PATCH | `/admin/users/:id/deactivate` | `{ active: false\|true }` – revokes sessions |
 | PATCH | `/admin/items/:id/deactivate` | `{ active }` |
 | PATCH | `/admin/reviews/:id/hide`, `/admin/item-reviews/:id/hide` *(extra)* | `{ hidden }` |
-| PATCH | `/admin/reports/:id/status` | `{ status: UNDER_REVIEW\|NEEDS_MORE_INFORMATION\|RESOLVED, note? }` |
-| POST | `/admin/reports/:id/decision` | `{ decision: APPROVED\|PARTIALLY_APPROVED\|REJECTED, approvedAmount, publicNote?, internalNote?, depositAction: NONE\|RELEASE\|WITHHOLD\|PARTIAL_WITHHOLD, withheldAmount? }` – records decision only, no payout |
-| GET/PATCH | `/admin/settings` | `{ protectionMode, protectionActive, minProtectionFeeCents, protectionPercentage, maxProtectedValueCents, depositPercentage, maxDepositCents, allowedCategories, platformFeeEnabled, platformFeePercentage }` – INSURANCE rejected without configured provider |
+| PATCH | `/admin/reports/:id/status` | `{ status: UNDER_REVIEW\|NEEDS_MORE_INFORMATION\|RESOLVED\|REJECTED, publicNote?, internalNote? }` – stored as a decision + audit log; nothing is approved or paid out automatically |
+| GET/PATCH | `/admin/settings` | `{ platformFeeEnabled, platformFeePercentage }` (Ochrana prenájmu pricing is fixed in code; there is no deposit) |
 
 All admin mutations write an `AuditLog` entry (admin id, action, entity, old value, new value, timestamp).
 

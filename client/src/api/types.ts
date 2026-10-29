@@ -4,8 +4,6 @@ export type RentalStatus =
   | 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'ACTIVE' | 'RETURN_PENDING' | 'RETURNED' | 'DISPUTED' | 'COMPLETED';
 export type ProtectionMode = 'NONE' | 'PROTECTION_FEE' | 'INSURANCE';
 export type RentalMode = 'DAILY' | 'HOURLY';
-export type DepositStatus =
-  | 'NOT_REQUIRED' | 'PENDING' | 'HELD' | 'RELEASE_REQUESTED' | 'RELEASED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | 'DISPUTED';
 export type ReportType =
   | 'ITEM_DAMAGED' | 'ITEM_NOT_RETURNED' | 'LATE_RETURN' | 'ITEM_DIFFERENT_THAN_DESCRIPTION' | 'USER_BEHAVIOR' | 'PAYMENT_PROBLEM' | 'OTHER';
 export type ReportStatus =
@@ -31,20 +29,19 @@ export interface ItemCard {
   condition: Condition; isActive: boolean; deactivatedByAdmin: boolean; createdAt: string;
   images: { id: string; url: string }[];
   owner: { id: string; name: string; city: string; avatarUrl: string | null; rating: RatingShort };
-  rating: RatingShort; protectionAvailable: boolean; isFavorite: boolean;
+  rating: RatingShort; isFavorite: boolean;
 }
 
 export interface PriceBreakdown {
   rentalMode: RentalMode; durationMinutes: number | null; durationDays: number | null; units: number; unit: 'HOUR' | 'DAY';
+  /** rental + Ochrana prenájmu (+ platform fee). ShareOn has no deposit. */
   pricePerUnitCents: number; rentalPriceCents: number; protectionFeeCents: number;
-  depositCents: number; platformFeeCents: number; totalCents: number; refundableCents: number; currency: 'EUR';
-  protectionMode: ProtectionMode; protectionAvailable: boolean;
-  protection: null | { provider: string; isDemo: boolean; isInsurance: boolean; available: boolean; feeCents: number; protectedValueCents: number; disclaimer: string; breakdown: Record<string, unknown> };
+  platformFeeCents: number; totalCents: number; currency: 'EUR';
+  protection: { provider: string; isDemo: boolean; available: boolean; feeCents: number; disclaimer: string };
 }
 
 export interface ItemDetail extends Omit<ItemCard, 'owner' | 'rating' | 'availableToday'> {
   availableFrom: string; availableTo: string; replacementValueCents: number; serialNote?: string | null;
-  protectionEligible: boolean;
   minRentalHours: number; maxRentalHours: number; minRentalDays: number; maxRentalDays: number;
   availableFromTime: string; availableToTime: string; bufferHours: number;
   owner: { id: string; name: string; city: string; bio: string | null; avatarUrl: string | null; createdAt: string; rating: RatingSummary };
@@ -69,13 +66,13 @@ export interface RentalDetail extends RentalPeriodFields {
   id: string; status: RentalStatus; proposedStartDate: string | null; proposedEndDate: string | null;
   proposedStartTime: string | null; proposedEndTime: string | null; startAt: string; endAt: string; isOverdue: boolean;
   message: string | null; ownerNote: string | null; handoverMethod: string;
-  price: { pricePerUnitCents: number; rentalPriceCents: number; protectionFeeCents: number; depositCents: number; platformFeeCents: number; totalCents: number; refundableCents: number; currency: string };
+  price: { pricePerUnitCents: number; rentalPriceCents: number; protectionFeeCents: number; platformFeeCents: number; totalCents: number; currency: string };
   protectionMode: ProtectionMode; createdAt: string; acceptedAt: string | null; activeAt: string | null; returnedAt: string | null; completedAt: string | null; cancelledAt: string | null;
   item: { id: string; title: string; category: Category; images: { id: string; url: string }[]; replacementValueCents: number };
   renter: Party; owner: Party; contactVisible: boolean;
   handoverRecords: HandoverRecord[];
-  protection: null | { id: string; status: string; isDemo: boolean; feeCents: number; protectedValueCents: number; label: string | null; notice: string };
-  deposit: null | { id: string; status: DepositStatus; amountCents: number; withheldCents: number; isSimulated: boolean; label: string | null };
+  protection: null | { id: string; status: string; feeCents: number; notice: string };
+  paymentNotice: string;
   reports: { id: string; type: ReportType; status: ReportStatus; createdAt: string; reporterId: string }[];
   reviews: { id: string; type: 'RENTER_TO_OWNER' | 'OWNER_TO_RENTER'; authorId: string; overall: number; comment: string | null }[];
   itemReview: { id: string; overall: number } | null;
@@ -98,21 +95,32 @@ export interface Review {
 
 export interface ReportDetail {
   id: string; rentalRequestId: string | null; type: ReportType; description: string; status: ReportStatus;
-  requestedAmountCents: number; approvedAmountCents: number | null; createdAt: string; updatedAt: string;
+  contactNote: string | null; createdAt: string; updatedAt: string;
   item: { id: string; title: string; replacementValueCents: number; images: { url: string }[] };
   reporter: { id: string; name: string }; reportedUser: { id: string; name: string } | null;
   evidence: { id: string; kind: 'EVIDENCE' | 'RESPONSE' | 'ADMIN_NOTE_PUBLIC'; text: string | null; fileUrl: string | null; createdAt: string; author: { id: string; name: string } }[];
-  decisions: { id: string; decision: ReportStatus; approvedAmountCents: number | null; publicNote: string | null; internalNote?: string | null; admin?: { name: string }; createdAt: string }[];
+  decisions: { id: string; decision: ReportStatus; publicNote: string | null; internalNote?: string | null; admin?: { name: string }; createdAt: string }[];
+  /** Admin only: reservation details and contacts of both parties */
+  rental?: {
+    id: string; status: RentalStatus; rentalMode: RentalMode; startAt: string; endAt: string; returnedAt: string | null;
+    rentalPriceCents: number; protectionFeeCents: number;
+    renter: { id: string; name: string; email: string; phone: string }; owner: { id: string; name: string; email: string; phone: string };
+  };
   viewerRole: 'REPORTER' | 'REPORTED' | 'ADMIN' | 'PARTICIPANT'; isOpen: boolean; disclaimer: string;
 }
 
 export interface PublicSettings {
   settings: {
-    protectionMode: ProtectionMode; protectionActive: boolean; minProtectionFeeCents: number; protectionPercentage: number;
-    maxProtectedValueCents: number; maxDepositCents: number; depositPercentage: number; allowedCategories: Category[];
-    platformFeeEnabled: boolean; platformFeePercentage: number; protectionProvider: string; insuranceAvailable: boolean; paymentsSimulated: boolean;
+    protectionFee: { rate: number; minCents: number; maxCents: number }; reportWindowHours: number;
+    platformFeeEnabled: boolean; platformFeePercentage: number; paymentsSimulated: boolean;
   };
-  texts: { protectionNotice: string; protectionNoticeSk: string; demoLabel: string; demoNotice: string; simulatedPaymentLabel: string; damageDisclaimer: string };
+  texts: { protectionNotice: string; protectionHint: string; paymentNotice: string; mvpNotice: string; damageDisclaimer: string };
+}
+
+export type FeedbackType = 'LIKE' | 'BUG' | 'FEATURE' | 'TESTER';
+export interface FeedbackEntry {
+  id: string; type: FeedbackType; contact: string | null; message: string; createdAt: string;
+  user: { id: string; name: string; email: string } | null;
 }
 
 export interface Notification { id: string; type: string; title: string; body: string | null; link: string | null; readAt: string | null; createdAt: string }

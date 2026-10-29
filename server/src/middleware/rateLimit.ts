@@ -18,3 +18,4 @@ const make = (windowMs: number, limit: number): RequestHandler =>
 export const apiLimiter = make(15 * 60 * 1000, 600);
 export const authLimiter = make(15 * 60 * 1000, 20);
 export const uploadLimiter = make(15 * 60 * 1000, 60);
+export const feedbackLimiter = make(60 * 60 * 1000, 10);

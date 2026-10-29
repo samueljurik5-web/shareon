@@ -13,6 +13,8 @@ export interface RiskSignals {
 export type RentalDuration = { mode: 'DAILY'; days: number } | { mode: 'HOURLY'; minutes: number };
 
 export interface ProtectionQuoteInput {
+  /** Rental price the fee is derived from (cents) */
+  rentalPriceCents: number;
   replacementValueCents: number;
   category: Category;
   duration: RentalDuration;
@@ -24,7 +26,7 @@ export type { RentalMode };
 export interface ProtectionQuote {
   provider: string;
   mode: ProtectionMode;
-  /** Mock/demo provider: true. Must be shown as “DEMO / TEST MODE”. */
+  /** MVP: true – payments are simulated, no money is moved. */
   isDemo: boolean;
   isInsurance: boolean;
   available: boolean;
@@ -60,11 +62,23 @@ export interface ProtectionProvider {
   getStatus(id: string): Promise<ProtectionStatus>;
 }
 
-export const PROTECTION_NOTICE =
-  'ShareOn Rental Protection is not insurance coverage. It is an internal platform protection mechanism. Compensation is not automatic and is assessed according to ShareOn rules and available evidence.';
+/**
+ * Ochrana prenájmu – MVP pricing, included in every rental (hourly and daily):
+ *   fee = 10 % of the rental price, at least 0,50 €, at most 5,00 € per rental.
+ */
+export const PROTECTION_FEE = { rate: 0.1, minCents: 50, maxCents: 500 } as const;
 
+/** Integer-cent fee for a rental price (10 % rounded half up, then clamped). */
+export const calculateProtectionFee = (rentalPriceCents: number): number =>
+  Math.min(PROTECTION_FEE.maxCents, Math.max(PROTECTION_FEE.minCents, Math.round(rentalPriceCents / 10)));
+
+/** Short explanation shown under the fee. */
+export const PROTECTION_FEE_HINT_SK = 'Chráni tvoj prenájom a pomáha riešiť prípadné škody alebo spory.';
+
+/** Rules of Ochrana prenájmu – no guarantee, no automatic compensation. */
 export const PROTECTION_NOTICE_SK =
-  'Ochrana prenájmu ShareOn nie je poistné krytie. Je to interný ochranný mechanizmus platformy. Kompenzácia nie je automatická a posudzuje sa podľa pravidiel ShareOn a dostupných dôkazov.';
+  'Ochrana prenájmu je služba ShareOn, ktorá pomáha riešiť prípadné škody a spory. Každé hlásenie posudzuje tím ShareOn podľa pravidiel a dostupných dôkazov – náhrada nie je automatická ani garantovaná.';
 
-export const DEMO_LABEL = 'DEMO / TEST MODE';
-export const DEMO_NOTICE_SK = 'Toto nie je skutočné poistné krytie.';
+/** First public test version – payments are simulated. */
+export const MVP_NOTICE_SK = 'ShareOn je v prvej testovacej verzii. Pomôž nám ju zlepšiť svojou spätnou väzbou.';
+export const PAYMENTS_SIMULATED_SK = 'V testovacej verzii sa platby zatiaľ reálne nestrhávajú – suma sa len prehľadne zaznamená v rezervácii.';

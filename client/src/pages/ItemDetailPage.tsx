@@ -11,6 +11,7 @@ import {
 import { ErrorState, Spinner } from '../components/States';
 import { PriceBreakdown } from '../components/PriceBreakdown';
 import { ProtectionNotice } from '../components/ProtectionNotice';
+import { NoDepositBadge, SafeRental } from '../components/Trust';
 import { RatingDistribution, RatingInline } from '../components/Rating';
 import { ReviewList } from '../components/ReviewList';
 import { Avatar } from '../components/Avatar';
@@ -77,7 +78,8 @@ export function ItemDetailPage() {
           <div className="flex flex-wrap gap-2">
             <span className="badge"><Tag className="h-3 w-3" aria-hidden />{CATEGORY_LABELS[item.category]}</span>
             <span className="badge">Stav: {CONDITION_LABELS[item.condition]}</span>
-            {item.protectionAvailable && <span className="badge badge-protect"><ShieldCheck className="h-3 w-3" aria-hidden />Ochrana prenájmu</span>}
+            <NoDepositBadge />
+            <span className="badge badge-protect"><ShieldCheck className="h-3 w-3" aria-hidden />Ochrana prenájmu v cene</span>
             {!item.isActive && <span className="badge badge-danger">Neaktívny</span>}
           </div>
           <div className="flex items-start justify-between gap-3">
@@ -120,6 +122,8 @@ export function ItemDetailPage() {
           )}
           {item.isOwner && item.serialNote && <p className="text-xs text-ink-3">Identifikačná poznámka (vidíš len ty): {item.serialNote}</p>}
         </div>
+
+        <SafeRental />
 
         <Link to={`/users/${item.owner.id}`} className="card flex items-center gap-4 p-5 hover:border-neon-purple/40">
           <Avatar name={item.owner.name} url={item.owner.avatarUrl} size={52} />
@@ -212,7 +216,6 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, start, end, startTime, endTime, item.id, nonce]);
 
-  const needsDisclaimer = (price?.protectionFeeCents ?? 0) > 0;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -220,7 +223,7 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
     if (!mode) return setErrors({ mode: 'Najprv vyber, či si chceš predmet požičať na hodiny alebo na dni.' });
     const errs: Record<string, string> = {};
     if (!rules) errs.acceptRules = 'Musíš súhlasiť s pravidlami ShareOn.';
-    if (needsDisclaimer && !disclaimer) errs.disclaimer = 'Potvrď, že rozumieš, že Ochrana prenájmu nie je poistenie.';
+    if (!disclaimer) errs.disclaimer = 'Potvrď, že súhlasíš s pravidlami Ochrany prenájmu.';
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setSubmitting(true);
@@ -342,11 +345,11 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
           {quoteError ? (
             <p className="notice notice-warn" role="alert">{quoteError}</p>
           ) : price ? (
-            <PriceBreakdown {...price} isDemo={price.protection?.isDemo} />
+            <PriceBreakdown {...price} showPaymentNote />
           ) : (
             <Spinner label="Počítam cenu…" />
           )}
-          {needsDisclaimer && <ProtectionNotice compact />}
+          <ProtectionNotice />
           <SelectField id="r-handover" label="Spôsob odovzdania" value={handover} onChange={(e) => setHandover(e.target.value)}>
             {Object.entries(HANDOVER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </SelectField>
@@ -354,17 +357,15 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
           <Checkbox id="r-rules" checked={rules} onChange={setRules} error={errors.acceptRules}>
             Súhlasím s <Link to="/protection" className="text-neon-blue underline">pravidlami ShareOn</Link> a zaväzujem sa predmet vrátiť včas a v rovnakom stave.
           </Checkbox>
-          {needsDisclaimer && (
-            <Checkbox id="r-disc" checked={disclaimer} onChange={setDisclaimer} error={errors.disclaimer}>
-              Rozumiem, že Ochrana prenájmu <strong>nie je poistenie</strong> a kompenzácia nie je automatická.
-            </Checkbox>
-          )}
+          <Checkbox id="r-disc" checked={disclaimer} onChange={setDisclaimer} error={errors.disclaimer}>
+            Súhlasím s <Link to="/protection" className="text-neon-blue underline">pravidlami Ochrany prenájmu</Link> – prípadnú škodu posúdi ShareOn, náhrada nie je automatická.
+          </Checkbox>
           <button type="submit" className="btn btn-primary w-full" disabled={submitting || !price || quoting}>
             {submitting ? 'Odosielam…' : user ? 'Požiadať o prenájom' : 'Prihlás sa a požiadaj o prenájom'}
           </button>
         </>
       )}
-      <p className="text-xs text-ink-3">Kontaktné údaje sa zobrazia až po prijatí žiadosti. Platby a kaucia sú v MVP simulované. Časy sú v časovom pásme Bratislava.</p>
+      <p className="text-xs text-ink-3">Bez kaucie. Kontaktné údaje sa zobrazia až po prijatí žiadosti. Časy sú v časovom pásme Bratislava.</p>
     </form>
   );
 }

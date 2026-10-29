@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-import { DEMO_CATEGORY_MOVES, DEMO_DATA_VERSION, DEMO_OWNER_DISTRICTS } from './demo-data.js';
+import { DEMO_CATEGORY_MOVES, DEMO_DATA_VERSION, DEMO_OWNER_DISTRICTS, DEMO_PRICES } from './demo-data.js';
 
 const DEMO_EMAILS = [
   'jana@example.sk',
@@ -75,6 +75,27 @@ const upgradeDemoData = async (prisma: PrismaClient) => {
       moved += res.count;
     }
     console.info(`[demo-data] v3: district set on ${located} demo items, ${moved} moved to new categories`);
+  }
+  // v4: realistic prices, every demo item rentable per hour and per day
+  if (current < 4) {
+    let repriced = 0;
+    for (const [title, p] of Object.entries(DEMO_PRICES)) {
+      const res = await prisma.item.updateMany({
+        where: demoOwned(title),
+        data: {
+          dailyRentalEnabled: true,
+          dailyPriceCents: p.daily * 100,
+          hourlyRentalEnabled: true,
+          hourlyPriceCents: p.hourly * 100,
+          minRentalHours: 1,
+          maxRentalHours: 10,
+          availableFromTime: '08:00',
+          availableToTime: '20:00',
+        },
+      });
+      repriced += res.count;
+    }
+    console.info(`[demo-data] v4: realistic prices on ${repriced} demo items`);
   }
   await prisma.appSetting.upsert({
     where: { key: 'demoDataVersion' },

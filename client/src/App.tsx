@@ -18,6 +18,7 @@ import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminItems } from './pages/admin/AdminItems';
 import { AdminReports } from './pages/admin/AdminReports';
 import { AdminSettings } from './pages/admin/AdminSettings';
+import { AdminFeedback } from './pages/admin/AdminFeedback';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
         <Route path="/admin/items" element={<RequireAdmin><AdminItems /></RequireAdmin>} />
         <Route path="/admin/reports" element={<RequireAdmin><AdminReports /></RequireAdmin>} />
         <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
+        <Route path="/admin/feedback" element={<RequireAdmin><AdminFeedback /></RequireAdmin>} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

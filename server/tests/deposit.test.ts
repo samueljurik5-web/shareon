@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { canTransitionDeposit } from '../src/services/deposit/index.js';
 import { prisma } from '../src/lib/prisma.js';
-import { api, resetDb, setupPendingRental, createUser } from './helpers.js';
+import { api, resetDb, setupPendingRental } from './helpers.js';
 
 describe('deposit state machine', () => {
   it('allows valid transitions', () => {
@@ -20,39 +20,30 @@ describe('deposit state machine', () => {
   });
 });
 
-describe('deposit API', () => {
+describe('no deposit in the rental flow', () => {
   beforeEach(resetDb);
 
-  it('holds a simulated deposit on acceptance, idempotently, and releases on cancel', async () => {
+  it('accepting a rental creates no deposit and the deposit API no longer exists', async () => {
     const { owner, renter, rentalId } = await setupPendingRental();
     await api().patch(`/api/rental-requests/${rentalId}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(200);
-
-    const first = await api().post(`/api/deposits/${rentalId}/create`).set(renter.auth).expect(201);
-    const second = await api().post(`/api/deposits/${rentalId}/create`).set(renter.auth).expect(201);
-    expect(first.body.deposit.id).toBe(second.body.deposit.id);
-    expect(first.body.deposit.status).toBe('HELD');
-    expect(first.body.deposit.label).toBe('SIMULATED PAYMENT');
-    expect(await prisma.deposit.count()).toBe(1);
-
-    await api().patch(`/api/rental-requests/${rentalId}/status`).set(renter.auth).send({ action: 'CANCEL' }).expect(200);
-    const after = await api().get(`/api/deposits/${rentalId}`).set(renter.auth).expect(200);
-    expect(after.body.deposit.status).toBe('RELEASED');
+    expect(await prisma.deposit.count()).toBe(0);
+    await api().post(`/api/deposits/${rentalId}/create`).set(renter.auth).expect(404);
+    const rental = await prisma.rentalRequest.findUniqueOrThrow({ where: { id: rentalId } });
+    expect(rental.depositCents).toBe(0);
+    expect(rental.totalCents).toBe(rental.rentalPriceCents + rental.protectionFeeCents);
   });
 
-  it('only admins can withhold; renters cannot release', async () => {
+  it('a legacy rental that stored a deposit is shown without it and its deposit is released on cancel', async () => {
     const { owner, renter, rentalId } = await setupPendingRental();
     await api().patch(`/api/rental-requests/${rentalId}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(200);
-    const dep = await prisma.deposit.findUniqueOrThrow({ where: { rentalRequestId: rentalId } });
+    const r = await prisma.rentalRequest.update({ where: { id: rentalId }, data: { depositCents: 3000, refundableCents: 3000, totalCents: { increment: 3000 } } });
+    await prisma.deposit.create({ data: { rentalRequestId: rentalId, amountCents: 3000, status: 'HELD', provider: 'mock', idempotencyKey: `rental:${rentalId}:deposit` } });
 
-    await api().post(`/api/deposits/${dep.id}/withhold`).set(owner.auth).send({}).expect(403);
-    await api().post(`/api/deposits/${dep.id}/release`).set(renter.auth).expect(403);
+    const detail = await api().get(`/api/rental-requests/${rentalId}`).set(renter.auth).expect(200);
+    expect(detail.body.rentalRequest.price.totalCents).toBe(r.rentalPriceCents + r.protectionFeeCents);
+    expect(JSON.stringify(detail.body.rentalRequest)).not.toMatch(/deposit/i);
 
-    const admin = await createUser({ role: 'ADMIN' });
-    const res = await api().post(`/api/deposits/${dep.id}/withhold`).set(admin.auth).send({ amount: 10 }).expect(200);
-    expect(res.body.deposit.status).toBe('PARTIALLY_WITHHELD');
-    expect(res.body.deposit.withheldCents).toBe(1000);
-    // terminal state – cannot be released any more
-    await api().post(`/api/deposits/${dep.id}/release`).set(admin.auth).expect(409);
-    expect(await prisma.auditLog.count({ where: { entityId: dep.id } })).toBe(1);
+    await api().patch(`/api/rental-requests/${rentalId}/status`).set(renter.auth).send({ action: 'CANCEL' }).expect(200);
+    expect((await prisma.deposit.findUniqueOrThrow({ where: { rentalRequestId: rentalId } })).status).toBe('RELEASED');
   });
 });

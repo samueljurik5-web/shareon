@@ -2,12 +2,15 @@ import type { Prisma, ReportStatus, ReportType, User } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { notify, notifyAdmins } from './notifications.js';
-import { tryTransitionDeposit, transitionDeposit } from './deposit/index.js';
+import { tryTransitionDeposit } from './deposit/index.js';
 import { audit } from './audit.js';
 import { loadRentalForParty, partyRole } from './rentals.js';
+import { isWithinReportWindow, REPORT_WINDOW_HOURS } from './reportWindow.js';
 
 export const DAMAGE_DISCLAIMER =
-  'ShareOn neposkytuje automatické rozhodnutie o škode. Prípad posudzuje administrátor podľa dostupných dôkazov a pravidiel platformy.';
+  'ShareOn neposkytuje automatické rozhodnutie o škode ani automatickú náhradu. Prípad posudzuje administrátor podľa dostupných dôkazov a pravidiel platformy.';
+
+export { REPORT_WINDOW_HOURS };
 
 const REPORTABLE_STATUSES = ['ACCEPTED', 'ACTIVE', 'RETURN_PENDING', 'RETURNED', 'DISPUTED', 'COMPLETED'];
 const OPEN_STATUSES: ReportStatus[] = ['OPEN', 'UNDER_REVIEW', 'NEEDS_MORE_INFORMATION'];
@@ -19,6 +22,7 @@ export interface CreateReportInput {
   description: string;
   requestedAmountCents: number;
   photos: string[];
+  contactNote?: string | null;
 }
 
 /** Opens a damage report / dispute for a rental. Never approves anything automatically. */
@@ -28,6 +32,9 @@ export const createReport = async (user: User, input: CreateReportInput) => {
   if (!role) throw forbidden('Nahlásiť problém môže len účastník prenájmu.');
   if (!REPORTABLE_STATUSES.includes(rental.status)) {
     throw conflict('Problém je možné nahlásiť až po prijatí žiadosti.');
+  }
+  if (!isWithinReportWindow(rental)) {
+    throw conflict(`Problém je možné nahlásiť najneskôr ${REPORT_WINDOW_HOURS} hodín po vrátení veci.`);
   }
   const item = await prisma.item.findUniqueOrThrow({ where: { id: rental.itemId } });
   if (input.requestedAmountCents > item.replacementValueCents) {
@@ -45,6 +52,7 @@ export const createReport = async (user: User, input: CreateReportInput) => {
         type: input.type,
         description: input.description,
         requestedAmountCents: input.requestedAmountCents,
+        contactNote: input.contactNote ?? null,
         evidence: {
           create: input.photos.map((url) => ({ authorId: user.id, kind: 'EVIDENCE' as const, fileUrl: url })),
         },
@@ -71,7 +79,12 @@ export const loadReportForUser = async (reportId: string, user: User) => {
   const report = await prisma.damageReport.findUnique({
     where: { id: reportId },
     include: {
-      rentalRequest: true,
+      rentalRequest: {
+        include: {
+          renter: { select: { id: true, name: true, email: true, phone: true } },
+          owner: { select: { id: true, name: true, email: true, phone: true } },
+        },
+      },
       item: { select: { id: true, title: true, replacementValueCents: true, images: { take: 1, orderBy: { position: 'asc' } } } },
       reporter: { select: { id: true, name: true, avatarUrl: true } },
       reportedUser: { select: { id: true, name: true, avatarUrl: true } },
@@ -94,16 +107,30 @@ export const serializeReport = (r: Awaited<ReturnType<typeof loadReportForUser>>
   reportedUser: r.reportedUser,
   type: r.type,
   description: r.description,
-  requestedAmountCents: r.requestedAmountCents,
-  approvedAmountCents: r.approvedAmountCents,
+  contactNote: r.contactNote,
   status: r.status,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
   evidence: r.evidence,
+  // Reservation details and contacts are for the admin only.
+  rental:
+    isAdmin && r.rentalRequest
+      ? {
+          id: r.rentalRequest.id,
+          status: r.rentalRequest.status,
+          rentalMode: r.rentalRequest.rentalMode,
+          startAt: r.rentalRequest.startAt,
+          endAt: r.rentalRequest.endAt,
+          returnedAt: r.rentalRequest.returnedAt,
+          rentalPriceCents: r.rentalRequest.rentalPriceCents,
+          protectionFeeCents: r.rentalRequest.protectionFeeCents,
+          renter: r.rentalRequest.renter,
+          owner: r.rentalRequest.owner,
+        }
+      : undefined,
   decisions: r.decisions.map((d) => ({
     id: d.id,
     decision: d.decision,
-    approvedAmountCents: d.approvedAmountCents,
     publicNote: d.publicNote,
     // Internal notes are admin-only.
     internalNote: isAdmin ? d.internalNote : undefined,
@@ -162,121 +189,66 @@ const closeRentalDisputeIfDone = async (tx: Prisma.TransactionClient, rentalRequ
   }
 };
 
+export type AdminReportStatus = 'UNDER_REVIEW' | 'NEEDS_MORE_INFORMATION' | 'RESOLVED' | 'REJECTED';
+
+const STATUS_TITLES: Record<AdminReportStatus, string> = {
+  UNDER_REVIEW: 'Hlásenie sa posudzuje',
+  NEEDS_MORE_INFORMATION: 'Administrátor potrebuje viac informácií k hláseniu',
+  RESOLVED: 'Hlásenie bolo vyriešené',
+  REJECTED: 'Hlásenie bolo zamietnuté',
+};
+
+/**
+ * Admin status change with an optional public note (shown to both parties) and an internal note (admins only).
+ * Every change is stored as an AdminDecision and in the audit log. Nothing is approved or paid out automatically.
+ */
 export const adminSetReportStatus = async (
   admin: User,
   reportId: string,
-  status: 'UNDER_REVIEW' | 'NEEDS_MORE_INFORMATION' | 'RESOLVED',
-  note?: string | null,
+  status: AdminReportStatus,
+  notes: { publicNote?: string | null; internalNote?: string | null } = {},
 ) => {
   const report = await prisma.damageReport.findUnique({ where: { id: reportId } });
   if (!report) throw notFound('Hlásenie sa nenašlo.');
-  if (report.status === 'RESOLVED') throw conflict('Hlásenie je už uzavreté.');
-  if (status !== 'RESOLVED' && FINAL_STATUSES.includes(report.status)) {
-    throw conflict('O hlásení už bolo rozhodnuté. Môžeš ho len uzavrieť.');
+  if (report.status === status) throw conflict('Hlásenie už má tento stav.');
+  if (FINAL_STATUSES.includes(report.status) && !(status === 'RESOLVED' && report.status !== 'RESOLVED' && report.status !== 'REJECTED')) {
+    throw conflict('Hlásenie je už uzavreté.');
   }
   return prisma.$transaction(async (tx) => {
     const updated = await tx.damageReport.update({ where: { id: report.id }, data: { status } });
-    if (note) {
-      await tx.reportEvidence.create({ data: { reportId: report.id, authorId: admin.id, kind: 'ADMIN_NOTE_PUBLIC', text: note } });
-    }
-    if (status === 'RESOLVED') await closeRentalDisputeIfDone(tx, report.rentalRequestId);
-    await audit({ adminId: admin.id, action: 'REPORT_STATUS_CHANGED', entityType: 'DamageReport', entityId: report.id, oldValue: { status: report.status }, newValue: { status, note } }, tx);
-    const title =
-      status === 'NEEDS_MORE_INFORMATION'
-        ? 'Administrátor potrebuje viac informácií k hláseniu'
-        : status === 'UNDER_REVIEW'
-          ? 'Hlásenie sa posudzuje'
-          : 'Hlásenie bolo uzavreté';
-    for (const uid of [report.reporterId, report.reportedUserId].filter(Boolean) as string[]) {
-      await notify(uid, { type: 'REPORT_STATUS', title, link: `/reports/${report.id}` }, tx);
-    }
-    return updated;
-  });
-};
-
-export interface DecisionInput {
-  decision: 'APPROVED' | 'PARTIALLY_APPROVED' | 'REJECTED';
-  approvedAmountCents: number;
-  publicNote?: string | null;
-  internalNote?: string | null;
-  depositAction: 'NONE' | 'RELEASE' | 'WITHHOLD' | 'PARTIAL_WITHHOLD';
-  withheldAmountCents?: number;
-}
-
-/**
- * Explicit admin decision. This is the ONLY place compensation can be approved,
- * and it only records the decision – no money is paid out automatically in the MVP.
- */
-export const adminDecide = async (admin: User, reportId: string, input: DecisionInput) => {
-  const report = await prisma.damageReport.findUnique({ where: { id: reportId } });
-  if (!report) throw notFound('Hlásenie sa nenašlo.');
-  if (!OPEN_STATUSES.includes(report.status)) throw conflict('O tomto hlásení už bolo rozhodnuté.');
-
-  const requested = report.requestedAmountCents;
-  if (input.decision === 'REJECTED' && input.approvedAmountCents !== 0) {
-    throw badRequest('Pri zamietnutí musí byť schválená suma 0 €.');
-  }
-  if (input.decision === 'APPROVED') {
-    if (requested > 0 && input.approvedAmountCents !== requested) {
-      throw badRequest('Pri úplnom schválení sa schválená suma musí rovnať požadovanej sume.');
-    }
-  }
-  if (input.decision === 'PARTIALLY_APPROVED') {
-    if (input.approvedAmountCents <= 0 || (requested > 0 && input.approvedAmountCents >= requested)) {
-      throw badRequest('Pri čiastočnom schválení musí byť suma väčšia ako 0 a menšia ako požadovaná suma.');
-    }
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const decision = await tx.adminDecision.create({
+    await tx.adminDecision.create({
       data: {
         reportId: report.id,
         adminId: admin.id,
-        decision: input.decision,
-        approvedAmountCents: input.approvedAmountCents,
-        publicNote: input.publicNote ?? null,
-        internalNote: input.internalNote ?? null,
+        decision: status,
+        publicNote: notes.publicNote || null,
+        internalNote: notes.internalNote || null,
       },
     });
-    const updated = await tx.damageReport.update({
-      where: { id: report.id },
-      data: { status: input.decision, approvedAmountCents: input.approvedAmountCents },
-    });
-
-    let depositChange: unknown = null;
-    if (input.depositAction !== 'NONE' && report.rentalRequestId) {
-      const deposit = await tx.deposit.findUnique({ where: { rentalRequestId: report.rentalRequestId } });
-      if (!deposit) throw badRequest('K prenájmu neexistuje záloha.');
-      const target =
-        input.depositAction === 'RELEASE' ? 'RELEASED' : input.depositAction === 'WITHHOLD' ? 'WITHHELD' : 'PARTIALLY_WITHHELD';
-      const after = await transitionDeposit(deposit.id, target, { withheldCents: input.withheldAmountCents }, tx);
-      depositChange = { from: deposit.status, to: after.status, withheldCents: after.withheldCents };
-      await audit({ adminId: admin.id, action: `DEPOSIT_${target}`, entityType: 'Deposit', entityId: deposit.id, oldValue: { status: deposit.status }, newValue: depositChange }, tx);
+    if (status === 'RESOLVED' || status === 'REJECTED') {
+      if (report.rentalRequestId) {
+        await tx.protectionRecord.updateMany({
+          where: { rentalRequestId: report.rentalRequestId, status: 'CLAIM_UNDER_REVIEW' },
+          data: { status: 'EXPIRED' },
+        });
+      }
+      await closeRentalDisputeIfDone(tx, report.rentalRequestId);
     }
-    if (report.rentalRequestId) {
-      await tx.protectionRecord.updateMany({
-        where: { rentalRequestId: report.rentalRequestId, status: 'CLAIM_UNDER_REVIEW' },
-        data: { status: 'EXPIRED' },
-      });
-    }
-
-    await closeRentalDisputeIfDone(tx, report.rentalRequestId);
     await audit(
       {
         adminId: admin.id,
-        action: 'REPORT_DECISION',
+        action: 'REPORT_STATUS_CHANGED',
         entityType: 'DamageReport',
         entityId: report.id,
-        oldValue: { status: report.status, approvedAmountCents: report.approvedAmountCents },
-        newValue: { status: input.decision, approvedAmountCents: input.approvedAmountCents, decisionId: decision.id, depositChange },
+        oldValue: { status: report.status },
+        newValue: { status, publicNote: notes.publicNote ?? null, internalNote: notes.internalNote ?? null },
       },
       tx,
     );
-    const labels = { APPROVED: 'schválené', PARTIALLY_APPROVED: 'čiastočne schválené', REJECTED: 'zamietnuté' };
     for (const uid of [report.reporterId, report.reportedUserId].filter(Boolean) as string[]) {
-      await notify(uid, { type: 'REPORT_DECISION', title: `Rozhodnutie k hláseniu: ${labels[input.decision]}`, link: `/reports/${report.id}` }, tx);
+      await notify(uid, { type: 'REPORT_STATUS', title: STATUS_TITLES[status], body: notes.publicNote ?? undefined, link: `/reports/${report.id}` }, tx);
     }
-    return { report: updated, decision };
+    return updated;
   });
 };
 

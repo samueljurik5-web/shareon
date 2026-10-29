@@ -1,11 +1,12 @@
-import { Heart, MapPin, ShieldCheck, Star } from 'lucide-react';
+import { Heart, MapPin, Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import type { ItemCard as Item } from '../api/types';
-import { formatKm, imageUrl, priceFrom } from '../lib/format';
+import { formatEur, formatKm, imageUrl, priceFrom } from '../lib/format';
 import { del, post } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
+import { NoDepositBadge } from './Trust';
 
 /** Stagger for cards in one visible group – capped so large lists never make the user wait. */
 const STAGGER_MS = 40;
@@ -77,11 +78,7 @@ export function ItemCard({ item, index = 0, featured = false, className = '' }: 
         >
           <Heart className={`h-4 w-4 transition-colors duration-200 ${fav ? 'animate-icon-pop fill-neon-pink text-neon-pink' : 'text-ink'}`} aria-hidden />
         </button>
-        {item.protectionAvailable && (
-          <span className="badge badge-protect absolute left-2 top-2 bg-night/80 backdrop-blur">
-            <ShieldCheck className="h-3 w-3" aria-hidden />Ochrana
-          </span>
-        )}
+        <NoDepositBadge className="absolute left-2 top-2 bg-night/80 backdrop-blur" />
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <div className="flex flex-wrap gap-1">
@@ -92,7 +89,12 @@ export function ItemCard({ item, index = 0, featured = false, className = '' }: 
         <h3 className={`line-clamp-2 font-bold leading-snug ${featured ? 'text-lg md:text-base' : 'text-sm sm:text-base'}`}>
           <Link to={`/items/${item.id}`} className="hover:underline">{item.title}</Link>
         </h3>
-        {price && <div className={`text-gradient font-extrabold ${featured ? 'text-xl md:text-lg' : 'text-base sm:text-lg'}`}>{price}</div>}
+        {price && (
+          <div className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className={`text-gradient font-extrabold ${featured ? 'text-xl md:text-lg' : 'text-base sm:text-lg'}`}>{price}</span>
+            {item.dailyPriceCents && item.hourlyPriceCents && <span className="text-xs font-bold text-ink-2">· {formatEur(item.hourlyPriceCents)} / hod.</span>}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
           {item.distanceKm != null ? (
             <span className="inline-flex items-center gap-1" title={`Orientačná vzdialenosť od centra Košíc${item.district ? ` (${item.district})` : ''}`}>

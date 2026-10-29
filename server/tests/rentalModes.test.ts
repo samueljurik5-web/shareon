@@ -27,11 +27,11 @@ describe('rental modes – quote, availability and requests', () => {
       rentalMode: 'HOURLY',
       durationMinutes: 240,
       rentalPriceCents: 1200,
-      protectionFeeCents: 150,
-      depositCents: 3000,
-      totalCents: 4350,
-      refundableCents: 3000,
+      protectionFeeCents: 120,
+      totalCents: 1320,
     });
+    expect(res.body.quote.price).not.toHaveProperty('depositCents');
+    expect(res.body.notices.protectionHint).toBe('Chráni tvoj prenájom a pomáha riešiť prípadné škody alebo spory.');
     expect(res.body.quote.period.label).toMatch(/14:00 – 18:00$/);
     expect(await prisma.rentalRequest.count()).toBe(0);
   });
@@ -51,7 +51,8 @@ describe('rental modes – quote, availability and requests', () => {
     expect((r.endAt.getTime() - r.startAt.getTime()) / 60000).toBe(90);
     const detail = await api().get(`/api/rental-requests/${r.id}`).set(renter.auth).expect(200);
     expect(detail.body.rentalRequest).toMatchObject({ rentalMode: 'HOURLY', durationMinutes: 90, startTime: '09:30' });
-    expect(detail.body.rentalRequest.price.refundableCents).toBe(3000);
+    // 1,5 h × 3 € = 4,50 € + minimum Ochrana prenájmu 0,50 € = 5,00 €
+    expect(detail.body.rentalRequest.price).toMatchObject({ rentalPriceCents: 450, protectionFeeCents: 50, totalCents: 500 });
   });
 
   it('rejects disabled modes, outside hours, too short/long, past dates and midnight crossing', async () => {

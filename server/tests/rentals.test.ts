@@ -19,11 +19,18 @@ describe('rental requests', () => {
     expect(rental.renterId).toBe(renter.user.id);
     expect(rental.durationDays).toBe(3);
     expect(rental.rentalMode).toBe('DAILY');
-    expect(rental.refundableCents).toBe(3000);
+    // 3 × 8 € = 24 € + Ochrana prenájmu 10 % = 2,40 € → 26,40 €; no deposit
     expect(rental.rentalPriceCents).toBe(2400);
-    expect(rental.protectionFeeCents).toBe(200);
-    expect(rental.depositCents).toBe(3000);
-    expect(rental.totalCents).toBe(5600);
+    expect(rental.protectionFeeCents).toBe(240);
+    expect(rental.depositCents).toBe(0);
+    expect(rental.refundableCents).toBe(0);
+    expect(rental.totalCents).toBe(2640);
+    const detail = await api().get(`/api/rental-requests/${rental.id}`).set(renter.auth).expect(200);
+    expect(detail.body.rentalRequest.price).toEqual({
+      pricePerUnitCents: 800, rentalPriceCents: 2400, protectionFeeCents: 240, platformFeeCents: 0, totalCents: 2640, currency: 'EUR',
+    });
+    expect(detail.body.rentalRequest).not.toHaveProperty('deposit');
+    expect(JSON.stringify(detail.body)).not.toMatch(/poisten|kauci|záloh/i);
     expect(await prisma.protectionQuote.count({ where: { rentalRequestId: rental.id } })).toBe(1);
   });
 
@@ -36,7 +43,7 @@ describe('rental requests', () => {
     await api().post('/api/rental-requests').set(renter.auth).send({ ...requestBody(item.id), acceptRules: false }).expect(400);
   });
 
-  it('requires the protection disclaimer when a protection fee applies', async () => {
+  it('requires agreeing to the Ochrana prenájmu rules', async () => {
     const owner = await createUser();
     const renter = await createUser();
     const item = await createItem(owner.user.id);
@@ -45,7 +52,7 @@ describe('rental requests', () => {
       .set(renter.auth)
       .send({ ...requestBody(item.id), acceptProtectionDisclaimer: false })
       .expect(400);
-    expect(res.body.error.message).toContain('nie je poistenie');
+    expect(res.body.error.message).toBe('Potvrď, že súhlasíš s pravidlami Ochrany prenájmu.');
   });
 
   it('hides contact details until accepted, then shows them', async () => {
@@ -58,17 +65,16 @@ describe('rental requests', () => {
     expect(after.body.rentalRequest.owner.phone).toBe('+421 900 123 456');
   });
 
-  it('owner accepts: creates protection record and simulated deposit; renter cannot accept', async () => {
+  it('owner accepts: activates Ochrana prenájmu, creates no deposit; renter cannot accept', async () => {
     const { owner, renter, rentalId } = await setupPendingRental();
     await api().patch(`/api/rental-requests/${rentalId}/status`).set(renter.auth).send({ action: 'ACCEPT' }).expect(409);
     const res = await api().patch(`/api/rental-requests/${rentalId}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(200);
     expect(res.body.rentalRequest.status).toBe('ACCEPTED');
     const protection = await prisma.protectionRecord.findUniqueOrThrow({ where: { rentalRequestId: rentalId } });
     expect(protection.isDemo).toBe(true);
-    expect(protection.feeCents).toBe(200);
-    const deposit = await prisma.deposit.findUniqueOrThrow({ where: { rentalRequestId: rentalId } });
-    expect(deposit.status).toBe('HELD');
-    expect(deposit.isSimulated).toBe(true);
+    expect(protection.feeCents).toBe(240);
+    expect(protection.status).toBe('ACTIVE');
+    expect(await prisma.deposit.count({ where: { rentalRequestId: rentalId } })).toBe(0);
     // idempotent protection creation
     const again = await api().post(`/api/protection/${rentalId}/create`).set(owner.auth).expect(201);
     expect(again.body.protection.id).toBe(protection.id);
@@ -112,16 +118,17 @@ describe('rental requests', () => {
     await api().patch(`/api/rental-requests/${second.body.rentalRequest.id}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(409);
   });
 
-  it('completes a rental via handover and return checklists and releases the deposit', async () => {
+  it('completes a rental via handover and return checklists', async () => {
     const { rentalId } = await setupCompletedRental();
-    const rental = await prisma.rentalRequest.findUniqueOrThrow({ where: { id: rentalId }, include: { deposit: true, handoverRecords: true } });
+    const rental = await prisma.rentalRequest.findUniqueOrThrow({ where: { id: rentalId }, include: { deposit: true, protection: true, handoverRecords: true } });
     expect(rental.status).toBe('COMPLETED');
-    expect(rental.deposit?.status).toBe('RELEASED');
+    expect(rental.deposit).toBeNull();
+    expect(rental.protection?.status).toBe('EXPIRED');
     expect(rental.handoverRecords).toHaveLength(4);
     expect(rental.handoverRecords.every((r) => r.userId && r.confirmedAt)).toBe(true);
   });
 
-  it('owner reporting a return issue keeps the deposit held', async () => {
+  it('owner reporting a return issue leaves the rental RETURNED (problem can be reported)', async () => {
     const { owner, renter, rentalId } = await setupPendingRental();
     await api().patch(`/api/rental-requests/${rentalId}/status`).set(owner.auth).send({ action: 'ACCEPT' }).expect(200);
     await api().post(`/api/rental-requests/${rentalId}/handover`).set(owner.auth).send({}).expect(200);
@@ -131,7 +138,7 @@ describe('rental requests', () => {
     await api().post(`/api/rental-requests/${rentalId}/return`).set(owner.auth).send({ itemOk: false }).expect(200);
     const r = await api().post(`/api/rental-requests/${rentalId}/return`).set(renter.auth).send({}).expect(200);
     expect(r.body.rentalRequest.status).toBe('RETURNED');
-    const dep = await prisma.deposit.findUniqueOrThrow({ where: { rentalRequestId: rentalId } });
-    expect(dep.status).toBe('HELD');
+    const detail = await api().get(`/api/rental-requests/${rentalId}`).set(owner.auth).expect(200);
+    expect(detail.body.rentalRequest.availableActions).toContain('REPORT');
   });
 });

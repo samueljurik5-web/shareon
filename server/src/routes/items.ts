@@ -13,7 +13,6 @@ import { storage } from '../services/storage/index.js';
 import { BLOCKING_RENTAL_STATUSES, itemInclude, serializeItems } from '../services/items.js';
 import { itemRatingSummary, userRatingSummary } from '../services/stats.js';
 import { CATEGORIES, getSettings } from '../services/settings.js';
-import { isProtectionAvailableFor } from '../services/protection/index.js';
 import { calculatePriceForDays, calculateRentalPrice } from '../services/pricing.js';
 import { addDaysToDate, zonedToUtc } from '../lib/time.js';
 import { publicUser } from '../lib/serialize.js';
@@ -167,7 +166,6 @@ const listQuery = z.object({
     .pipe(z.array(conditionEnum).optional()),
   from: dateOnly.optional(),
   to: dateOnly.optional(),
-  protection: z.enum(['true', 'false']).optional(),
   mode: z.enum(['DAILY', 'HOURLY']).optional(),
   ownerId: z.string().max(64).optional(),
   favorites: z.enum(['true', 'false']).optional(),
@@ -214,7 +212,6 @@ router.get('/', optionalAuth, async (req, res) => {
     take: 300,
   });
   let items = await serializeItems(candidates, req.user?.id);
-  if (q.protection === 'true') items = items.filter((i) => i.protectionAvailable);
   // Price filters/sorting: daily price when offered (or the price in the chosen mode).
   const priceOf = (i: (typeof items)[number]) =>
     q.mode === 'HOURLY' ? (i.hourlyPriceCents ?? 0) : (i.dailyPriceCents ?? i.hourlyPriceCents ?? 0);
@@ -297,8 +294,6 @@ router.get('/:id', optionalAuth, async (req, res) => {
       serialNote: isOwner || isAdmin ? item.serialNote : undefined,
       isActive: item.isActive,
       deactivatedByAdmin: item.deactivatedByAdmin,
-      protectionEligible: item.protectionEligible,
-      protectionAvailable: isProtectionAvailableFor(settings, item),
       createdAt: item.createdAt,
       images: item.images.map((i) => ({ id: i.id, url: i.url })),
       owner: { ...publicUser(item.owner), rating: ownerRating },

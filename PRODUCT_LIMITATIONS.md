@@ -3,36 +3,32 @@
 This MVP exists to **validate real demand** in Košice. It is intentionally limited. Read this before
 inviting real users.
 
-## 1. No real insurance
-- **The MVP does not provide real insurance.** Nothing in ShareOn is an insurance product, policy or contract.
-- The UI never uses the words “insured” or “insurance included”.
-- `protectionMode = INSURANCE` is **rejected** by the API unless a real provider is configured via
-  `INSURANCE_PROVIDER_NAME`, `INSURANCE_CONTRACT_REFERENCE`, `INSURANCE_TERMS_URL` and
-  `INSURANCE_LEGAL_REVIEW_APPROVED=true`. Even then, `ExternalInsuranceProviderPlaceholder` only throws
-  “not available” – it must be implemented against the partner's API.
-- **Real insurance requires a real, licensed insurance partner and legally reviewed terms**
-  (incl. insurance-distribution rules such as IDD, pre-contractual information/IPID).
+## 1. Ochrana prenájmu is not an insurance product
+- ShareOn has **no deposit**. Every rental includes **Ochrana prenájmu**: 10 % of the rental price,
+  at least 0,50 €, at most 5,00 € (server-side, `services/protection/types.ts`).
+- It is an **internal platform mechanism**, not an insurance product, policy or contract. The UI never uses
+  the word “poistenie”, never says “100 % poistené” and never claims an insurer covers damages.
+- Notice shown wherever the protection is explained (checkout, item form estimate, reservation, protection page):
+  > Ochrana prenájmu je služba ShareOn, ktorá pomáha riešiť prípadné škody a spory. Každé hlásenie posudzuje tím
+  > ShareOn podľa pravidiel a dostupných dôkazov – náhrada nie je automatická ani garantovaná.
+- Offering real insurance later requires a licensed insurance partner and legally reviewed terms
+  (incl. insurance-distribution rules such as IDD/IPID).
 
-## 2. Mock protection is not insurance
-- Default mode `PROTECTION_FEE` uses `MockProtectionProvider`, always labelled
-  **“DEMO / TEST MODE – Toto nie je skutočné poistné krytie.”**
-- The fee is an *internal demo calculation*: `max(1.50 €, value × 2 %) × (1 + max(0, days − 3) × 0.05)`.
-  It is **not insurance pricing**. Risk signals are recorded but do not change the fee.
-- Required notice (shown on item detail, request form, request detail, add-item estimate, protection page, admin settings):
-  > ShareOn Rental Protection is not insurance coverage. It is an internal platform protection mechanism.
-  > Compensation is not automatic and is assessed according to ShareOn rules and available evidence.
+## 2. Without a deposit, damage is settled case by case
+- Nothing is blocked on the renter's card. A damaged or missing item is handled through a claim
+  (“Nahlásiť problém”, up to 48 h after the return), photos from the handover/return, ratings and the admin's review.
+- Legacy deposit data (rentals created before the change) stays in the database but is never shown or used for totals.
 
 ## 3. Payments are not connected
-- **Real payments are not connected** unless a real payment provider is implemented and configured.
-  Only `MockDepositProvider` exists; every deposit is labelled **SIMULATED PAYMENT**.
-- Rental price, protection fee and platform fee are *displayed* but not charged. Users settle between
-  themselves outside the platform during the MVP.
+- **Real payments are not connected.** Rental price, Ochrana prenájmu and platform fee are calculated, stored with
+  the reservation and *displayed* (“V testovacej verzii sa platby zatiaľ reálne nestrhávajú…”), but not charged.
+  The trust copy “Bezpečná platba cez ShareOn” describes the intended flow; before a real launch a payment provider
+  (e.g. Stripe Connect) must be implemented.
 
 ## 4. Compensation decisions are not automatic
-- Opening a report never approves anything. Only an admin decision (`POST /api/admin/reports/:id/decision`)
-  can set an approved amount, and it is **only recorded** (audit-logged) – no money moves.
-- Shown to users: *“ShareOn neposkytuje automatické rozhodnutie o škode. Prípad posudzuje administrátor podľa
-  dostupných dôkazov a pravidiel platformy.”*
+- Opening a claim never approves or pays anything. The admin changes its status
+  (UNDER_REVIEW / NEEDS_MORE_INFORMATION / RESOLVED / REJECTED) with public and internal notes; every change is audit-logged.
+- Shown to users: *“ShareOn neposkytuje automatické rozhodnutie o škode ani automatickú náhradu…”*
 
 ## 5. Legal & compliance
 - **Legal documents (terms, rules, privacy policy) require professional legal review.** The in-app rules are a short draft.

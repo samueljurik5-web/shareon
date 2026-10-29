@@ -1,4 +1,4 @@
-import type { Category, Condition, DepositStatus, RentalMode, RentalStatus, ReportStatus, ReportType } from '../api/types';
+import type { Category, Condition, FeedbackType, RentalMode, RentalStatus, ReportStatus, ReportType } from '../api/types';
 
 const eur = new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' });
 export const formatEur = (cents: number) => eur.format(cents / 100);
@@ -63,26 +63,18 @@ export const RENTAL_STATUS_BADGE: Record<RentalStatus, string> = {
   COMPLETED: 'badge-protect',
 };
 
-export const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = {
-  NOT_REQUIRED: 'Nevyžaduje sa',
-  PENDING: 'Čaká',
-  HELD: 'Blokovaná',
-  RELEASE_REQUESTED: 'Požiadané o uvoľnenie',
-  RELEASED: 'Uvoľnená',
-  PARTIALLY_WITHHELD: 'Čiastočne zadržaná',
-  WITHHELD: 'Zadržaná',
-  DISPUTED: 'V spore',
-};
-
 export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
-  ITEM_DAMAGED: 'Poškodený predmet',
-  ITEM_NOT_RETURNED: 'Predmet nebol vrátený',
+  ITEM_DAMAGED: 'Poškodená vec',
+  ITEM_NOT_RETURNED: 'Vec nebola vrátená',
   LATE_RETURN: 'Oneskorené vrátenie',
-  ITEM_DIFFERENT_THAN_DESCRIPTION: 'Predmet nezodpovedá popisu',
+  ITEM_DIFFERENT_THAN_DESCRIPTION: 'Vec nezodpovedá popisu',
   USER_BEHAVIOR: 'Správanie používateľa',
   PAYMENT_PROBLEM: 'Problém s platbou',
-  OTHER: 'Iné',
+  OTHER: 'Iný problém',
 };
+
+/** Problem types offered in the report form (others remain readable for older reports). */
+export const REPORT_FORM_TYPES: ReportType[] = ['ITEM_DAMAGED', 'ITEM_NOT_RETURNED', 'ITEM_DIFFERENT_THAN_DESCRIPTION', 'OTHER'];
 
 export const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
   OPEN: 'Otvorené',
@@ -91,7 +83,14 @@ export const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
   APPROVED: 'Schválené',
   PARTIALLY_APPROVED: 'Čiastočne schválené',
   REJECTED: 'Zamietnuté',
-  RESOLVED: 'Uzavreté',
+  RESOLVED: 'Vyriešené',
+};
+
+export const FEEDBACK_TYPE_LABELS: Record<FeedbackType, string> = {
+  LIKE: 'Páči sa mi to',
+  BUG: 'Niečo nefunguje',
+  FEATURE: 'Chýba mi funkcia',
+  TESTER: 'Chcem pomôcť testovať',
 };
 
 export const HANDOVER_LABELS: Record<string, string> = {
@@ -102,14 +101,17 @@ export const HANDOVER_LABELS: Record<string, string> = {
 
 export const RATING_LABELS: Record<number, string> = { 1: 'Veľmi zlé', 2: 'Slabé', 3: 'Priemerné', 4: 'Dobré', 5: 'Výborné' };
 
-export const PROTECTION_NOTICE =
-  'ShareOn Rental Protection is not insurance coverage. It is an internal platform protection mechanism. Compensation is not automatic and is assessed according to ShareOn rules and available evidence.';
+/** Must match server/src/services/protection/types.ts (the server calculates the fee). */
+export const PROTECTION_HINT = 'Chráni tvoj prenájom a pomáha riešiť prípadné škody alebo spory.';
 export const PROTECTION_NOTICE_SK =
-  'Ochrana prenájmu ShareOn nie je poistné krytie. Je to interný ochranný mechanizmus platformy. Kompenzácia nie je automatická a posudzuje sa podľa pravidiel ShareOn a dostupných dôkazov.';
+  'Ochrana prenájmu je služba ShareOn, ktorá pomáha riešiť prípadné škody a spory. Každé hlásenie posudzuje tím ShareOn podľa pravidiel a dostupných dôkazov – náhrada nie je automatická ani garantovaná.';
+export const PAYMENTS_SIMULATED = 'V testovacej verzii sa platby zatiaľ reálne nestrhávajú – suma sa len prehľadne zaznamená v rezervácii.';
+export const MVP_NOTICE = 'ShareOn je v prvej testovacej verzii. Pomôž nám ju zlepšiť svojou spätnou väzbou.';
 export const DAMAGE_DISCLAIMER =
-  'ShareOn neposkytuje automatické rozhodnutie o škode. Prípad posudzuje administrátor podľa dostupných dôkazov a pravidiel platformy.';
+  'ShareOn neposkytuje automatické rozhodnutie o škode ani automatickú náhradu. Prípad posudzuje administrátor podľa dostupných dôkazov a pravidiel platformy.';
+export const REPORT_WINDOW_TEXT = 'Problém nahlás najneskôr do 48 hodín po vrátení veci.';
 export const ADMIN_WARNING =
-  'Pred aktiváciou skutočných platieb alebo poistného krytia musí byť nakonfigurovaný reálny payment provider, poisťovací partner a právne schválené podmienky.';
+  'Platby sú v testovacej verzii simulované. Pred spustením skutočných platieb musí byť nakonfigurovaný platobný poskytovateľ a právne schválené podmienky. Hlásenia sa nikdy neschvaľujú ani nevyplácajú automaticky.';
 
 export const EMPTY = {
   items: 'Zatiaľ tu nie sú žiadne predmety.',

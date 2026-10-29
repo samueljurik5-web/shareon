@@ -1,58 +1,77 @@
 import { CheckCircle2, ShieldCheck, XCircle } from 'lucide-react';
-import { get } from '../api/client';
-import type { PublicSettings } from '../api/types';
-import { useAsync } from '../lib/useAsync';
+import { Link } from 'react-router-dom';
 import { ProtectionNotice } from '../components/ProtectionNotice';
-import { CATEGORY_LABELS, DAMAGE_DISCLAIMER, formatEur } from '../lib/format';
+import { TRUST_CARDS } from '../lib/content';
+import { DAMAGE_DISCLAIMER, formatEur, MVP_NOTICE, PAYMENTS_SIMULATED, PROTECTION_HINT } from '../lib/format';
+
+/** Worked examples – the same values the server calculates (10 %, min. 0,50 €, max. 5,00 €). */
+const EXAMPLES = [500, 1200, 3000, 8000, 12000].map((rental) => {
+  const fee = Math.min(500, Math.max(50, Math.round(rental / 10)));
+  return { rental, fee, total: rental + fee };
+});
 
 export function ProtectionPage() {
-  const { data } = useAsync(() => get<PublicSettings>('/api/settings/public'), []);
-  const s = data?.settings;
-  const modeLabel = s ? ({ NONE: 'Vypnutá', PROTECTION_FEE: 'Poplatok za ochranu (interný mechanizmus)', INSURANCE: 'Poistenie cez partnera' } as const)[s.protectionMode] : '…';
-
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-gradient text-3xl font-extrabold sm:text-4xl">Ochrana prenájmu</h1>
-        <p className="mt-2 text-ink-2">Ako ShareOn chráni majiteľov aj nájomcov – a čo ochrana prenájmu <strong>nie je</strong>.</p>
+        <p className="mt-2 text-ink-2">Požičaj si bez kaucie. Ochranu prenájmu máš v cene každého prenájmu.</p>
       </div>
       <ProtectionNotice />
 
-      <section className="card space-y-3 p-5">
-        <h2 className="flex items-center gap-2 text-lg font-bold"><ShieldCheck className="h-5 w-5 text-neon-green" aria-hidden />Aktuálne nastavenie</h2>
-        {s ? (
-          <dl className="grid gap-2 text-sm sm:grid-cols-2">
-            <Row k="Režim" v={s.protectionActive ? modeLabel : 'Vypnutá'} />
-            <Row k="Poskytovateľ" v={s.protectionProvider === 'mock' ? 'DEMO / TEST MODE (interný výpočet)' : s.protectionProvider} />
-            <Row k="Minimálny poplatok" v={formatEur(s.minProtectionFeeCents)} />
-            <Row k="Percento z hodnoty" v={`${(s.protectionPercentage * 100).toFixed(1)} %`} />
-            <Row k="Max. chránená hodnota" v={formatEur(s.maxProtectedValueCents)} />
-            <Row k="Záloha" v={`${Math.round(s.depositPercentage * 100)} % z hodnoty, max. ${formatEur(s.maxDepositCents)}`} />
-            <Row k="Kategórie s ochranou" v={s.allowedCategories.map((c) => CATEGORY_LABELS[c]).join(', ') || '—'} />
-            <Row k="Skutočné poistenie" v={s.insuranceAvailable ? 'Nakonfigurované' : 'Nie je k dispozícii'} />
-          </dl>
-        ) : <p className="text-ink-3">Načítavam…</p>}
-      </section>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {TRUST_CARDS.map(({ icon: Icon, title, text }) => (
+          <section key={title} className="card flex gap-3 p-4">
+            <Icon className="mt-0.5 h-5 w-5 shrink-0 text-neon-green" aria-hidden />
+            <div>
+              <h2 className="font-bold">{title}</h2>
+              <p className="text-sm text-ink-2">{text}</p>
+            </div>
+          </section>
+        ))}
+      </div>
 
       <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-bold">Demo výpočet poplatku</h2>
-        <p className="text-sm text-ink-2">Interný demo výpočet – <strong>nejde o cenu poistenia</strong>.</p>
-        <pre className="overflow-x-auto rounded-2xl bg-night-2 p-4 text-xs text-ink-2">{`základný poplatok = max(1,50 €, hodnota predmetu × 2 %)
-násobok trvania   = 1 + max(0, počet dní − 3) × 0,05
-poplatok          = zaokrúhlenie(základ × násobok, 2 desatinné miesta)`}</pre>
-        <p className="text-sm text-ink-2">Príklad: predmet v hodnote 100 €, 3 dni × 8 € → prenájom 24 €, ochrana 2 €, vratná záloha 30 €, spolu 56 €.</p>
+        <h2 className="flex items-center gap-2 text-lg font-bold"><ShieldCheck className="h-5 w-5 text-neon-green" aria-hidden />Koľko to stojí</h2>
+        <p className="text-sm text-ink-2">
+          Ochrana prenájmu je <strong className="text-ink">10 % z ceny prenájmu</strong>, minimálne <strong className="text-ink">0,50 €</strong> a maximálne{' '}
+          <strong className="text-ink">5,00 €</strong> za prenájom – na hodiny aj na dni. {PROTECTION_HINT}
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[320px] text-left text-sm">
+            <thead className="text-xs uppercase text-ink-3">
+              <tr><th scope="col" className="py-2">Cena prenájmu</th><th scope="col" className="py-2">Ochrana prenájmu</th><th scope="col" className="py-2">Spolu</th></tr>
+            </thead>
+            <tbody className="divide-y divide-[rgba(255,255,255,0.06)]">
+              {EXAMPLES.map((e) => (
+                <tr key={e.rental}><td className="py-2">{formatEur(e.rental)}</td><td className="py-2">{formatEur(e.fee)}</td><td className="py-2 font-bold">{formatEur(e.total)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-ink-3">Žiadna kaucia ani vratná záloha. {PAYMENTS_SIMULATED}</p>
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <section className="card space-y-2 p-5">
-          <h2 className="font-bold text-neon-green">Čo ochrana znamená</h2>
-          {['Pri škode môžeš otvoriť hlásenie s dôkazmi.', 'Prípad posúdi administrátor ShareOn.', 'Záloha môže byť čiastočne alebo úplne zadržaná podľa rozhodnutia.', 'Fotky pri odovzdaní a vrátení slúžia ako dôkaz.'].map((t) => (
+          <h2 className="font-bold text-neon-green">Čo Ochrana prenájmu znamená</h2>
+          {[
+            'Pri odovzdaní aj vrátení zdokumentujete stav veci fotkami.',
+            'Problém alebo škodu nahlásiš v aplikácii do 48 hodín po vrátení.',
+            'Hlásenie s dôkazmi posúdi tím ShareOn a pomôže s riešením sporu.',
+            'Hodnotenia ukazujú, komu sa dá dôverovať.',
+          ].map((t) => (
             <p key={t} className="flex gap-2 text-sm text-ink-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-neon-green" aria-hidden />{t}</p>
           ))}
         </section>
         <section className="card space-y-2 p-5">
-          <h2 className="font-bold text-danger">Čo ochrana nie je</h2>
-          {['Nie je to poistenie ani poistná zmluva.', 'Kompenzácia nie je automatická ani garantovaná.', 'V MVP sa neprevádzajú žiadne skutočné peniaze (SIMULATED PAYMENT).', 'Nekryje škody nad maximálnu chránenú hodnotu.'].map((t) => (
+          <h2 className="font-bold text-danger">Na čo myslieť</h2>
+          {[
+            'Náhrada škody nie je automatická ani garantovaná.',
+            'Každé hlásenie posudzuje človek podľa pravidiel a dôkazov.',
+            'Bez fotiek a včasného nahlásenia je posúdenie ťažšie.',
+            'V testovacej verzii sa platby reálne nestrhávajú.',
+          ].map((t) => (
             <p key={t} className="flex gap-2 text-sm text-ink-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />{t}</p>
           ))}
         </section>
@@ -63,21 +82,13 @@ poplatok          = zaokrúhlenie(základ × násobok, 2 desatinné miesta)`}</p
         <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-2">
           <li>Ponúkaj len veci, na ktoré máš právo, a opíš ich pravdivo vrátane poškodení.</li>
           <li>Pri odovzdaní aj vrátení nahrajte fotky stavu a potvrďte checklist.</li>
-          <li>Predmet vráť načas, čistý a v rovnakom stave.</li>
-          <li>Problémy rieš cez hlásenie v aplikácii – nie mimo platformy.</li>
+          <li>Vec vráť načas, čistú a v rovnakom stave.</li>
+          <li>Problémy rieš cez „Nahlásiť problém“ v aplikácii – najneskôr do 48 hodín po vrátení.</li>
           <li>{DAMAGE_DISCLAIMER}</li>
         </ol>
-        <p className="text-xs text-ink-3">Právne dokumenty (VOP, ochrana osobných údajov) v MVP ešte neprešli odbornou právnou kontrolou.</p>
+        <p className="text-xs text-ink-3">{MVP_NOTICE} Právne dokumenty (VOP, ochrana osobných údajov) ešte neprešli odbornou právnou kontrolou.</p>
       </section>
-    </div>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="card-elevated p-3">
-      <dt className="text-xs text-ink-3">{k}</dt>
-      <dd className="font-semibold">{v}</dd>
+      <Link to="/" className="btn btn-primary">Preskúmať veci na prenájom</Link>
     </div>
   );
 }

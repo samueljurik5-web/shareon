@@ -4,11 +4,12 @@
 > from people nearby. Launch market: **Košice, Slovakia**. UI language: **Slovak**.
 
 ShareOn MVP covers the full rental loop: registration → listing → search → rental request →
-accept/reject/propose dates → server-side pricing (rental price, protection fee, refundable
-deposit, optional platform fee) → handover checklist → return checklist → completion → mutual
-ratings + item rating → disputes with evidence → admin decision with audit log.
+accept/reject/propose dates → server-side pricing (rental price + **Ochrana prenájmu** 10 %, 0,50–5 €,
+optional platform fee – **no deposit**) → handover checklist → return checklist → completion → mutual
+ratings + item rating → claims (“Nahlásiť problém”, 48 h after return) → admin review with audit log →
+home page feedback.
 
-> ⚠️ **ShareOn Rental Protection is not insurance coverage.** Payments and deposits are **simulated**.
+> ⚠️ **Ochrana prenájmu is an internal platform mechanism, not insurance.** Payments are **simulated**.
 > Read [PRODUCT_LIMITATIONS.md](PRODUCT_LIMITATIONS.md) before showing this to real users.
 
 ## Stack
@@ -113,10 +114,10 @@ server/
   prisma/schema.prisma, migrations/, seed.ts
   src/config        env validation
   src/middleware    auth (JWT + tokenVersion revocation), validation, rate limits, errors
-  src/routes        auth, users, items, rental-requests, protection, deposits, reviews, reports, admin, uploads
+  src/routes        auth, users, items, rental-requests, protection, reviews, reports, feedback, admin, uploads
   src/services      pricing, rentals (state machine), reports, reviews, settings, audit, notifications
-  src/services/protection   ProtectionProvider + NoProtection / Mock / ExternalInsurancePlaceholder
-  src/services/deposit      DepositProvider + MockDepositProvider + state machine
+  src/services/protection   Ochrana prenájmu fee (10 %, 0,50–5 €) + provider/records
+  src/services/deposit      legacy deposits only (no new deposits are created)
   src/services/storage      StorageProvider + LocalStorageProvider + image validation
   tests/            Vitest + Supertest
 client/
@@ -128,10 +129,9 @@ See also: [DEPLOYMENT.md](DEPLOYMENT.md) · [API.md](API.md) · [SECURITY_NOTES.
 
 ## ⚠️ Production warnings
 
-- **No real insurance.** `PROTECTION_FEE` mode uses `MockProtectionProvider` (labelled *DEMO / TEST MODE*).
-  `INSURANCE` mode is rejected until a real insurance partner, contract, terms and legal review exist.
-- **No real payments.** Deposits are `SIMULATED PAYMENT`; nothing is charged, held or refunded.
-- **Compensation is never automatic** – only an explicit admin decision records an approved amount, and nothing is paid out.
+- **No insurance product.** Ochrana prenájmu is an internal ShareOn mechanism; the UI never says “poistenie”.
+- **No deposit, no real payments.** Amounts are calculated and stored, nothing is charged.
+- **Compensation is never automatic** – claims are reviewed by an admin (status + notes, audit-logged); nothing is paid out.
 - Replace seed credentials, set a strong `JWT_SECRET`, restrict `CORS_ORIGINS`, use HTTPS.
 - Replace local file storage with object storage (S3/Cloudinary) + malware scanning.
 - Terms of service, privacy policy (GDPR) and consumer-law compliance require professional legal review.

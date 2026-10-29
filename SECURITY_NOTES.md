@@ -9,11 +9,11 @@
 | Role-based access (`requireAdmin`) and ownership checks (item owner, rental party, report participant) | routes + `services/rentals.ts`, `services/reports.ts` |
 | Zod validation of every body/query; unknown keys stripped or rejected (`.strict()` for settings/profile) | `middleware/validate.ts` |
 | Prisma parameterized queries only (one `$executeRaw` tagged template for row locking) | – |
-| **Server-side prices**: rental, protection fee, deposit, platform fee, total computed on server; client amounts ignored | `services/pricing.ts` |
+| **Server-side prices**: rental, Ochrana prenájmu (10 %, 0,50–5 €), platform fee, total computed on server; no deposit; client amounts ignored | `services/pricing.ts` |
 | Server-side state machine for rental statuses (`availableActions`) + optimistic locking on status | `services/rentals.ts` |
 | Row lock on item when accepting to prevent double booking | `lockItem()` |
-| Idempotency: protection record & deposit keyed by `rental:<id>:protection|deposit` (unique) | `services/protection/records.ts`, `services/deposit` |
-| Deposit state machine with terminal states | `services/deposit/transitions.ts` |
+| Idempotency: protection record keyed by `rental:<id>:protection` (unique) | `services/protection/records.ts` |
+| Claims: only parties, max. 48 h after return, admin-only status changes with audit log; feedback rate-limited (10/h/IP) | `services/reports.ts`, `routes/feedback.ts` |
 | Contact info (phone/e-mail) only shown to the counterparty after acceptance; public profiles never show them | `routes/rentals.ts`, `lib/serialize.ts` |
 | Admin internal notes never sent to non-admins | `services/reports.ts#serializeReport` |
 | Audit log for every admin action (old/new value, admin id, timestamp) | `services/audit.ts` |
@@ -23,7 +23,7 @@
 | Rate limiting (global API, stricter for auth & uploads) | `middleware/rateLimit.ts` |
 | Helmet security headers, CORS allow-list, JSON body limit 100 kB, `x-powered-by` disabled | `app.ts` |
 | Safe error responses (no stack traces); logs contain method/path/message only – never bodies, passwords or tokens | `middleware/error.ts` |
-| Env validation; production refuses `dev-only*` JWT secret; INSURANCE mode refused without configured provider | `config/env.ts`, `services/settings.ts` |
+| Env validation; production refuses `dev-only*` JWT secret | `config/env.ts`, `services/settings.ts` |
 | Seed refuses to run in production unless `ALLOW_SEED=true` | `prisma/seed.ts` |
 
 ## Known gaps / before production

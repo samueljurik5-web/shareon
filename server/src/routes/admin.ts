@@ -5,18 +5,15 @@ import { prisma } from '../lib/prisma.js';
 import { parseBody, parseQuery } from '../middleware/validate.js';
 import { currentUser, requireAdmin, requireAuth } from '../middleware/auth.js';
 import { badRequest, notFound } from '../lib/errors.js';
-import { euroAmount } from '../lib/validation.js';
-import { toCents } from '../lib/money.js';
 import { audit } from '../services/audit.js';
 import { getSettings, settingsPatchSchema, updateSettings } from '../services/settings.js';
-import { adminDecide, adminSetReportStatus } from '../services/reports.js';
-import { isInsuranceProviderConfigured } from '../config/env.js';
+import { adminSetReportStatus } from '../services/reports.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
 
 export const ADMIN_WARNING =
-  'Pred aktiváciou skutočných platieb alebo poistného krytia musí byť nakonfigurovaný reálny payment provider, poisťovací partner a právne schválené podmienky.';
+  'Platby sú v testovacej verzii simulované. Pred spustením skutočných platieb musí byť nakonfigurovaný platobný poskytovateľ a právne schválené podmienky. Hlásenia sa nikdy neschvaľujú ani nevyplácajú automaticky.';
 
 const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
@@ -37,15 +34,15 @@ const userSelect = {
 } as const;
 
 router.get('/overview', async (_req, res) => {
-  const [users, items, rentals, openReports, heldDeposits, activeProtection] = await Promise.all([
+  const [users, items, rentals, openReports, feedback, activeProtection] = await Promise.all([
     prisma.user.count(),
     prisma.item.count({ where: { isActive: true } }),
     prisma.rentalRequest.count(),
     prisma.damageReport.count({ where: { status: { in: ['OPEN', 'UNDER_REVIEW', 'NEEDS_MORE_INFORMATION'] } } }),
-    prisma.deposit.count({ where: { status: { in: ['HELD', 'DISPUTED', 'RELEASE_REQUESTED'] } } }),
+    prisma.feedback.count(),
     prisma.protectionRecord.count({ where: { status: { in: ['ACTIVE', 'CLAIM_UNDER_REVIEW'] } } }),
   ]);
-  res.json({ counts: { users, items, rentals, openReports, heldDeposits, activeProtection }, warning: ADMIN_WARNING });
+  res.json({ counts: { users, items, rentals, openReports, feedback, activeProtection }, warning: ADMIN_WARNING });
 });
 
 router.get('/users', async (req, res) => {
@@ -78,7 +75,6 @@ router.get('/rentals', async (req, res) => {
       item: { select: { id: true, title: true } },
       renter: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },
-      deposit: { select: { id: true, status: true, amountCents: true } },
       protection: { select: { id: true, status: true, feeCents: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -95,7 +91,7 @@ router.get('/reports', async (req, res) => {
       item: { select: { id: true, title: true } },
       reporter: { select: { id: true, name: true } },
       reportedUser: { select: { id: true, name: true } },
-      rentalRequest: { select: { id: true, status: true, deposit: { select: { id: true, status: true, amountCents: true } } } },
+      rentalRequest: { select: { id: true, status: true, rentalMode: true, startAt: true, endAt: true, returnedAt: true } },
       _count: { select: { evidence: true, decisions: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -117,14 +113,15 @@ router.get('/protection', async (req, res) => {
   res.json({ records, quotes });
 });
 
-router.get('/deposits', async (req, res) => {
+router.get('/feedback', async (req, res) => {
   const q = parseQuery(listQuery, req);
-  const deposits = await prisma.deposit.findMany({
-    include: { rentalRequest: { select: { id: true, status: true, item: { select: { title: true } }, renter: { select: { name: true } } } } },
+  const feedback = await prisma.feedback.findMany({
+    where: q.status ? { type: q.status as never } : undefined,
+    include: { user: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: 'desc' },
     take: q.take,
   });
-  res.json({ deposits });
+  res.json({ feedback });
 });
 
 router.get('/reviews', async (req, res) => {
@@ -200,40 +197,19 @@ router.patch('/item-reviews/:id/hide', async (req, res) => {
 });
 
 const reportStatusSchema = z.object({
-  status: z.enum(['UNDER_REVIEW', 'NEEDS_MORE_INFORMATION', 'RESOLVED'], { errorMap: () => ({ message: 'Neplatný stav.' }) }),
-  note: z.string().trim().max(2000).optional().nullable(),
+  status: z.enum(['UNDER_REVIEW', 'NEEDS_MORE_INFORMATION', 'RESOLVED', 'REJECTED'], { errorMap: () => ({ message: 'Neplatný stav.' }) }),
+  publicNote: z.string().trim().max(2000, 'Poznámka je príliš dlhá.').optional().nullable(),
+  internalNote: z.string().trim().max(2000, 'Poznámka je príliš dlhá.').optional().nullable(),
 });
 
 router.patch('/reports/:id/status', async (req, res) => {
   const data = parseBody(reportStatusSchema, req);
-  const report = await adminSetReportStatus(currentUser(req), param(req, 'id'), data.status, data.note);
+  const report = await adminSetReportStatus(currentUser(req), param(req, 'id'), data.status, data);
   res.json({ report: { id: report.id, status: report.status } });
 });
 
-const decisionSchema = z.object({
-  decision: z.enum(['APPROVED', 'PARTIALLY_APPROVED', 'REJECTED'], { errorMap: () => ({ message: 'Vyber rozhodnutie.' }) }),
-  approvedAmount: euroAmount('Schválená suma', 20000).default(0),
-  publicNote: z.string().trim().max(2000).optional().nullable(),
-  internalNote: z.string().trim().max(2000).optional().nullable(),
-  depositAction: z.enum(['NONE', 'RELEASE', 'WITHHOLD', 'PARTIAL_WITHHOLD']).default('NONE'),
-  withheldAmount: euroAmount('Zadržaná suma', 100000).optional(),
-});
-
-router.post('/reports/:id/decision', async (req, res) => {
-  const data = parseBody(decisionSchema, req);
-  const result = await adminDecide(currentUser(req), param(req, 'id'), {
-    decision: data.decision,
-    approvedAmountCents: toCents(data.approvedAmount),
-    publicNote: data.publicNote,
-    internalNote: data.internalNote,
-    depositAction: data.depositAction,
-    withheldAmountCents: data.withheldAmount != null ? toCents(data.withheldAmount) : undefined,
-  });
-  res.status(201).json({ report: { id: result.report.id, status: result.report.status }, decision: result.decision });
-});
-
 router.get('/settings', async (_req, res) => {
-  res.json({ settings: await getSettings(), insuranceProviderConfigured: isInsuranceProviderConfigured(), warning: ADMIN_WARNING });
+  res.json({ settings: await getSettings(), warning: ADMIN_WARNING });
 });
 
 router.patch('/settings', async (req, res) => {

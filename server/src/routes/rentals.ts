@@ -20,8 +20,7 @@ import {
 } from '../services/rentals.js';
 import { createReport } from '../services/reports.js';
 import { publicUser } from '../lib/serialize.js';
-import { SIMULATED_PAYMENT_LABEL } from '../services/deposit/index.js';
-import { DEMO_LABEL, DEMO_NOTICE_SK, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
+import { PAYMENTS_SIMULATED_SK, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
 import { toDateOnlyString } from '../lib/dates.js';
 
 const router = Router();
@@ -90,7 +89,6 @@ router.get('/:id', async (req, res) => {
       owner: true,
       handoverRecords: { include: { photos: true, user: { select: { id: true, name: true } } }, orderBy: { confirmedAt: 'asc' } },
       protection: true,
-      deposit: true,
       reports: { select: { id: true, type: true, status: true, createdAt: true, reporterId: true } },
       reviews: { where: { isHidden: false } },
       itemReview: true,
@@ -129,10 +127,9 @@ router.get('/:id', async (req, res) => {
         pricePerUnitCents: full.pricePerUnitCents,
         rentalPriceCents: full.rentalPriceCents,
         protectionFeeCents: full.protectionFeeCents,
-        depositCents: full.depositCents,
         platformFeeCents: full.platformFeeCents,
-        totalCents: full.totalCents,
-        refundableCents: full.refundableCents,
+        // No deposit in ShareOn – legacy rentals that stored one are shown without it.
+        totalCents: full.rentalPriceCents + full.protectionFeeCents + full.platformFeeCents,
         currency: full.currency,
       },
       protectionMode: full.protectionMode,
@@ -156,11 +153,10 @@ router.get('/:id', async (req, res) => {
       protection: full.protection
         ? {
             ...full.protection,
-            label: full.protection.isDemo ? DEMO_LABEL : null,
-            notice: full.protection.isDemo ? `${DEMO_NOTICE_SK} ${PROTECTION_NOTICE_SK}` : PROTECTION_NOTICE_SK,
+            notice: PROTECTION_NOTICE_SK,
           }
         : null,
-      deposit: full.deposit ? { ...full.deposit, label: full.deposit.isSimulated ? SIMULATED_PAYMENT_LABEL : null } : null,
+      paymentNotice: PAYMENTS_SIMULATED_SK,
       reports: full.reports,
       reviews: full.reviews,
       itemReview: full.itemReview,
@@ -234,6 +230,7 @@ export const reportSchema = z.object({
   description: z.string({ required_error: 'Popíš problém.' }).trim().min(20, 'Popíš problém aspoň 20 znakmi.').max(3000),
   requestedAmount: euroAmount('Požadovaná suma', 20000).default(0),
   photos: photosSchema,
+  contactNote: z.string().trim().max(500, 'Poznámka je príliš dlhá.').optional().nullable(),
 });
 
 router.post('/:id/dispute', async (req, res) => {
@@ -246,6 +243,7 @@ router.post('/:id/dispute', async (req, res) => {
     description: data.description,
     requestedAmountCents: toCents(data.requestedAmount),
     photos: data.photos,
+    contactNote: data.contactNote,
   });
   res.status(201).json({ report: { id: report.id, status: report.status } });
 });

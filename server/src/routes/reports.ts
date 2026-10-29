@@ -23,6 +23,7 @@ router.post('/', async (req, res) => {
     description: data.description,
     requestedAmountCents: toCents(data.requestedAmount),
     photos: data.photos,
+    contactNote: data.contactNote,
   });
   res.status(201).json({ report: { id: report.id, status: report.status } });
 });

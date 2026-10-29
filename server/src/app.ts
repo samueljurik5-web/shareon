@@ -12,13 +12,13 @@ import userRoutes from './routes/users.js';
 import itemRoutes from './routes/items.js';
 import rentalRoutes from './routes/rentals.js';
 import protectionRoutes from './routes/protection.js';
-import depositRoutes from './routes/deposits.js';
 import reviewRoutes from './routes/reviews.js';
 import reportRoutes from './routes/reports.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/uploads.js';
 import notificationRoutes from './routes/notifications.js';
 import settingsRoutes from './routes/settings.js';
+import feedbackRoutes from './routes/feedback.js';
 import pricingRoutes from './routes/pricing.js';
 
 export const createApp = () => {
@@ -80,13 +80,13 @@ export const createApp = () => {
   app.use('/api/items', itemRoutes);
   app.use('/api/rental-requests', rentalRoutes);
   app.use('/api/protection', protectionRoutes);
-  app.use('/api/deposits', depositRoutes);
   app.use('/api/reviews', reviewRoutes);
   app.use('/api/reports', reportRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/settings', settingsRoutes);
+  app.use('/api/feedback', feedbackRoutes);
   app.use('/api/pricing', pricingRoutes);
   app.use('/api', notFoundHandler);
 

@@ -1,5 +1,7 @@
 # ShareOn – Implementation Plan
 
+> **Update (public MVP):** deposits were removed and Ochrana prenájmu is a fixed 10 % fee (0,50–5 €) on every rental; claims are reviewed via status changes; home page feedback was added. See README.md / API.md for the current model.
+
 ## 0. Repository inspection
 The repository was empty (no existing frontend, backend, DB or package manager). A new
 project is initialized as an **npm workspaces monorepo**:
