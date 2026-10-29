@@ -1,17 +1,18 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CONTACT_EMAIL, OPERATOR } from '../lib/site';
+import { useSite } from '../lib/site';
 
 const MISSING = '[doplní prevádzkovateľ]';
 const VALID_FROM = '30. 10. 2026';
 
 /** Operator identification (Slovak e-commerce law) – values come from the deployment settings. */
 function OperatorInfo() {
+  const { operatorName, contactEmail } = useSite();
   return (
     <dl className="card-elevated grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 p-4 text-sm">
-      <dt className="text-ink-3">Prevádzkovateľ</dt><dd>{OPERATOR.name ?? MISSING}</dd>
+      <dt className="text-ink-3">Prevádzkovateľ</dt><dd>{operatorName ?? MISSING}</dd>
       <dt className="text-ink-3">Kontakt</dt>
-      <dd>{CONTACT_EMAIL ? <a href={`mailto:${CONTACT_EMAIL}`} className="text-neon-blue underline">{CONTACT_EMAIL}</a> : MISSING}</dd>
+      <dd>{contactEmail ? <a href={`mailto:${contactEmail}`} className="text-neon-blue underline">{contactEmail}</a> : MISSING}</dd>
     </dl>
   );
 }

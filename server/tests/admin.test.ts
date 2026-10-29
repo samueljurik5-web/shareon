@@ -40,6 +40,24 @@ describe('admin & access control', () => {
     expect(JSON.stringify(res.body)).not.toMatch(/poist|insur|kauci|deposit/i);
   });
 
+  it('public settings return the operator name and contact from the server environment (no rebuild needed)', async () => {
+    const saved = { n: process.env.VITE_OPERATOR_NAME, e: process.env.VITE_CONTACT_EMAIL };
+    try {
+      process.env.VITE_OPERATOR_NAME = '  Samuel Testovací ';
+      process.env.VITE_CONTACT_EMAIL = 'zle-email';
+      let res = await api().get('/api/settings/public').expect(200);
+      expect(res.body.site).toEqual({ operatorName: 'Samuel Testovací', contactEmail: null, instagramUrl: null });
+      process.env.VITE_CONTACT_EMAIL = 'ahoj@shareon.sk';
+      res = await api().get('/api/settings/public').expect(200);
+      expect(res.body.site.contactEmail).toBe('ahoj@shareon.sk');
+    } finally {
+      process.env.VITE_OPERATOR_NAME = saved.n;
+      process.env.VITE_CONTACT_EMAIL = saved.e;
+      if (saved.n === undefined) delete process.env.VITE_OPERATOR_NAME;
+      if (saved.e === undefined) delete process.env.VITE_CONTACT_EMAIL;
+    }
+  });
+
   it('deactivating a user revokes their sessions and hides their items', async () => {
     const admin = await createUser({ role: 'ADMIN' });
     const user = await createUser();

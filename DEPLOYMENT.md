@@ -54,7 +54,7 @@ To stop seeding demo data (e.g. before real users), set `DEMO_SEED_ON_EMPTY=fals
 | `VITE_INSTAGRAM_URL` | no (build time) | public `https://…` Instagram profile for the footer; without it the footer shows „Instagram – čoskoro“ |
 | `VITE_CONTACT_EMAIL` | no (build time) | public contact e-mail shown on `/ako-to-funguje#kontakt` |
 
-`VITE_*` values are baked into the frontend during the build – after changing them on Render run a new deploy.
+`VITE_OPERATOR_NAME`, `VITE_CONTACT_EMAIL` and `VITE_INSTAGRAM_URL` are also read by the server at runtime (`GET /api/settings/public` → `site`), so a restart is enough after changing them.
 
 ## Option B – Vercel (frontend) + Render/Railway (API) + Neon/Render (PostgreSQL)
 

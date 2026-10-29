@@ -8,7 +8,7 @@ import type { Notification } from '../api/types';
 import { formatDateTime } from '../lib/format';
 import { Avatar } from './Avatar';
 import { ErrorBoundary } from './ErrorBoundary';
-import { INSTAGRAM_URL, OPERATOR } from '../lib/site';
+import { useSite } from '../lib/site';
 
 const desktopLinks = [
   { to: '/search', label: 'Objaviť' },
@@ -22,6 +22,7 @@ export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const site = useSite();
 
   // New page → top; with an #anchor (e.g. /#spatna-vazba, /ako-to-funguje#kontakt) → that section.
   useEffect(() => {
@@ -87,14 +88,14 @@ export function Layout() {
           <Link to="/#spatna-vazba" className="hover:text-ink">Spätná väzba</Link>
           <Link to="/podmienky" className="hover:text-ink">Podmienky</Link>
           <Link to="/ochrana-udajov" className="hover:text-ink">Ochrana osobných údajov</Link>
-          {INSTAGRAM_URL ? (
-            <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="hover:text-ink">Instagram</a>
+          {site.instagramUrl ? (
+            <a href={site.instagramUrl} target="_blank" rel="noopener noreferrer" className="hover:text-ink">Instagram</a>
           ) : (
             <span className="text-ink-3" title="Instagram profil pripravujeme">Instagram – čoskoro</span>
           )}
         </nav>
         <p className="px-4">
-          {OPERATOR.name ? `${OPERATOR.name} · ` : ''}ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
+          {site.operatorName ? `${site.operatorName} · ` : ''}ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
           <span className="mx-2">·</span>
           <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
         </p>

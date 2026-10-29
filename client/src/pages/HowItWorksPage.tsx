@@ -1,10 +1,11 @@
 import { Mail, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { CONTACT_EMAIL } from '../lib/site';
+import { useSite } from '../lib/site';
 import { HOW_STEPS } from '../lib/content';
 
 
 export function HowItWorksPage() {
+  const { contactEmail: CONTACT_EMAIL } = useSite();
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
