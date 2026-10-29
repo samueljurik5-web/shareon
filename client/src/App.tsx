@@ -12,6 +12,7 @@ import { RequestsPage } from './pages/RequestsPage';
 import { RequestDetailPage } from './pages/RequestDetailPage';
 import { ProtectionPage } from './pages/ProtectionPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
+import { PrivacyPage, TermsPage } from './pages/LegalPages';
 import { ReportPage } from './pages/ReportPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminUsers } from './pages/admin/AdminUsers';
@@ -19,6 +20,7 @@ import { AdminItems } from './pages/admin/AdminItems';
 import { AdminReports } from './pages/admin/AdminReports';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminFeedback } from './pages/admin/AdminFeedback';
+import { AdminInsights } from './pages/admin/AdminInsights';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
@@ -38,6 +40,8 @@ export function App() {
         <Route path="/requests/:id" element={<RequireAuth><RequestDetailPage /></RequireAuth>} />
         <Route path="/protection" element={<ProtectionPage />} />
         <Route path="/ako-to-funguje" element={<HowItWorksPage />} />
+        <Route path="/podmienky" element={<TermsPage />} />
+        <Route path="/ochrana-udajov" element={<PrivacyPage />} />
         <Route path="/reports/:id" element={<RequireAuth><ReportPage /></RequireAuth>} />
         <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
         <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
@@ -45,6 +49,7 @@ export function App() {
         <Route path="/admin/reports" element={<RequireAdmin><AdminReports /></RequireAdmin>} />
         <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
         <Route path="/admin/feedback" element={<RequireAdmin><AdminFeedback /></RequireAdmin>} />
+        <Route path="/admin/insights" element={<RequireAdmin><AdminInsights /></RequireAdmin>} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

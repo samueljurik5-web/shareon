@@ -7,7 +7,9 @@ ShareOn MVP covers the full rental loop: registration → listing → search →
 accept/reject/propose dates → server-side pricing (rental price + **Ochrana prenájmu** 10 %, 0,50–5 €,
 optional platform fee – **no deposit**) → handover checklist → return checklist → completion → mutual
 ratings + item rating → claims (“Nahlásiť problém”, 48 h after return) → admin review with audit log →
-home page feedback.
+home page feedback. Launch validation: sample listings (“Ukážka”, not bookable), waitlist (“Chcem byť medzi prvými”),
+demand capture (“Čo hľadáš”, zero-result searches), anonymous funnel counters (Admin → Štatistiky), optional
+e-mail notifications (Resend), terms + privacy pages.
 
 > ⚠️ **Ochrana prenájmu is an internal platform mechanism, not insurance.** Payments are **simulated**.
 > Read [PRODUCT_LIMITATIONS.md](PRODUCT_LIMITATIONS.md) before showing this to real users.

@@ -8,6 +8,8 @@ import { badRequest, notFound } from '../lib/errors.js';
 import { audit } from '../services/audit.js';
 import { getSettings, settingsPatchSchema, updateSettings } from '../services/settings.js';
 import { adminSetReportStatus } from '../services/reports.js';
+import { EVENT_LABELS } from '../services/events.js';
+import { addDaysToDate, todayLocal, zonedToUtc } from '../lib/time.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -122,6 +124,47 @@ router.get('/feedback', async (req, res) => {
     take: q.take,
   });
   res.json({ feedback });
+});
+
+const insightsQuery = z.object({ days: z.coerce.number().int().min(1).max(365).default(30) });
+
+/** Launch insights: anonymous funnel counters, searches (incl. zero results), waitlist and demand. */
+router.get('/insights', async (req, res) => {
+  const { days } = parseQuery(insightsQuery, req);
+  const since = new Date(`${addDaysToDate(todayLocal(), -(days - 1))}T00:00:00Z`);
+  const sinceInstant = zonedToUtc(addDaysToDate(todayLocal(), -(days - 1)));
+  const [totals, daily, searches, zero, waitlistByRole, waitlist, demand] = await Promise.all([
+    prisma.eventCount.groupBy({ by: ['name'], where: { day: { gte: since } }, _sum: { count: true } }),
+    prisma.eventCount.findMany({ where: { day: { gte: since } }, orderBy: { day: 'desc' } }),
+    prisma.searchLog.groupBy({
+      by: ['query'],
+      where: { createdAt: { gte: sinceInstant } },
+      _count: { _all: true },
+      _max: { resultCount: true },
+      orderBy: { _count: { query: 'desc' } },
+      take: 30,
+    }),
+    prisma.searchLog.groupBy({
+      by: ['query'],
+      where: { createdAt: { gte: sinceInstant }, resultCount: 0 },
+      _count: { _all: true },
+      orderBy: { _count: { query: 'desc' } },
+      take: 30,
+    }),
+    prisma.waitlistSignup.groupBy({ by: ['role'], _count: { _all: true } }),
+    prisma.waitlistSignup.findMany({ orderBy: { createdAt: 'desc' }, take: 500 }),
+    prisma.demandRequest.findMany({ orderBy: { createdAt: 'desc' }, take: 300 }),
+  ]);
+  const sum = Object.fromEntries(totals.map((t) => [t.name, t._sum.count ?? 0]));
+  res.json({
+    days,
+    funnel: Object.entries(EVENT_LABELS).map(([name, label]) => ({ name, label, count: sum[name] ?? 0 })),
+    daily: daily.map((d) => ({ day: d.day.toISOString().slice(0, 10), name: d.name, count: d.count })),
+    searches: searches.map((s) => ({ query: s.query, count: s._count._all, maxResults: s._max.resultCount ?? 0 })),
+    zeroResultSearches: zero.map((s) => ({ query: s.query, count: s._count._all })),
+    waitlist: { byRole: Object.fromEntries(waitlistByRole.map((w) => [w.role, w._count._all])), entries: waitlist },
+    demand,
+  });
 });
 
 router.get('/reviews', async (req, res) => {

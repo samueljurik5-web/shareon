@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { TextField } from '../components/Field';
+import { Checkbox, TextField } from '../components/Field';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 
@@ -65,6 +65,7 @@ export function RegisterPage() {
   const { toast } = useUi();
   const navigate = useNavigate();
   const [f, setF] = useState({ name: '', email: '', password: '', phone: '', city: 'Košice' });
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -78,11 +79,12 @@ export function RegisterPage() {
     else if (!/[A-Za-z]/.test(f.password) || !/[0-9]/.test(f.password)) errs.password = 'Heslo musí obsahovať písmeno aj číslo.';
     if (!/^\+?[0-9 ]{9,16}$/.test(f.phone.trim())) errs.phone = 'Zadaj platné telefónne číslo, napr. +421 900 123 456.';
     if (f.city.trim().length < 2) errs.city = 'Zadaj mesto.';
+    if (!acceptTerms) errs.acceptTerms = 'Na registráciu potrebujeme tvoj súhlas s podmienkami používania.';
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setBusy(true);
     try {
-      await register(f);
+      await register({ ...f, acceptTerms });
       toast('Účet bol vytvorený. Vitaj v ShareOn!');
       navigate('/');
     } catch (err) {
@@ -103,6 +105,10 @@ export function RegisterPage() {
         <TextField id="password" type="password" autoComplete="new-password" label="Heslo" value={f.password} onChange={set('password')} error={errors.password} hint="Aspoň 8 znakov, písmeno a číslo." />
         <TextField id="phone" type="tel" autoComplete="tel" label="Telefón" value={f.phone} onChange={set('phone')} error={errors.phone} hint="Zobrazí sa len druhej strane po prijatí žiadosti." />
         <TextField id="city" autoComplete="address-level2" label="Mesto" value={f.city} onChange={set('city')} error={errors.city} />
+        <Checkbox id="acceptTerms" checked={acceptTerms} onChange={setAcceptTerms} error={errors.acceptTerms}>
+          Súhlasím s <Link to="/podmienky" className="text-neon-blue underline" target="_blank">podmienkami používania</Link> a beriem na vedomie{' '}
+          <Link to="/ochrana-udajov" className="text-neon-blue underline" target="_blank">zásady ochrany osobných údajov</Link>.
+        </Checkbox>
         <button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Vytváram účet…' : 'Vytvoriť účet'}</button>
         <p className="text-center text-sm text-ink-2">Už máš účet? <Link to="/login" className="font-semibold text-neon-blue">Prihlás sa</Link></p>
       </form>

@@ -1,4 +1,4 @@
-import { BadgeCheck, Camera, CreditCard, Flag, Handshake, ShieldCheck, Star, Wallet } from 'lucide-react';
+import { BadgeCheck, Camera, Flag, Handshake, ReceiptText, ShieldCheck, Star, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /** "🛡️ Bez kaucie" – on every item card and item detail. */
@@ -15,7 +15,7 @@ export function TrustBadges() {
   const badges: { icon?: LucideIcon; emoji?: string; label: string }[] = [
     { emoji: '🛡️', label: 'Bez kaucie' },
     { icon: ShieldCheck, label: 'Ochrana prenájmu v cene' },
-    { icon: CreditCard, label: 'Bezpečná platba' },
+    { icon: ReceiptText, label: 'Jasná cena vopred' },
     { icon: Star, label: 'Hodnotenia používateľov' },
   ];
   return (
@@ -33,7 +33,7 @@ export function TrustBadges() {
 const SAFE_POINTS: { icon: LucideIcon; text: string }[] = [
   { icon: Wallet, text: 'Žiadna vratná kaucia.' },
   { icon: ShieldCheck, text: 'Ochrana prenájmu v cene.' },
-  { icon: CreditCard, text: 'Bezpečná platba cez ShareOn.' },
+  { icon: ReceiptText, text: 'Jasná cena vopred, bez skrytých poplatkov.' },
   { icon: Camera, text: 'Fotodokumentácia stavu veci pri odovzdaní.' },
   { icon: Flag, text: 'Nahlásenie škody do 48 hodín po vrátení.' },
   { icon: Star, text: 'Hodnotenia používateľov.' },

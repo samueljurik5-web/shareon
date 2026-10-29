@@ -18,7 +18,7 @@ describe('PriceBreakdown', () => {
     expect(within(box).getByText('Spolu')).toBeInTheDocument();
     expect(norm(within(box).getByTestId('price-total').textContent)).toBe('26,40 €');
     expect(within(box).queryByText(/Poplatok platformy/)).not.toBeInTheDocument();
-    expect(within(box).getByText(/reálne nestrhávajú/)).toBeInTheDocument();
+    expect(within(box).getByText(/zaplatíš majiteľovi pri odovzdaní/)).toBeInTheDocument();
     // "Bez kaucie" is the only mention – no deposit amount, no "poistenie"
     expect(box.textContent).not.toMatch(/vratná kaucia|záloha \d|poisten/i);
   });
@@ -29,7 +29,7 @@ describe('PriceBreakdown', () => {
     );
     expect(norm(screen.getByText(/hod\. ×/).textContent)).toBe('4 hod. × 3,00 €');
     expect(norm(screen.getByTestId('price-total').textContent)).toBe('13,20 €');
-    expect(screen.queryByText(/reálne nestrhávajú/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/zaplatíš majiteľovi pri odovzdaní/)).not.toBeInTheDocument();
   });
 
   it('fractional hours with the 0,50 € minimum and an enabled platform fee', () => {

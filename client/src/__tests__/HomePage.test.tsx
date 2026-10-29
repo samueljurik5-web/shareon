@@ -13,7 +13,7 @@ const mockPost = vi.mocked(post);
 
 const item = (n: number, extra: Partial<ItemCard> = {}): ItemCard => ({
   id: `i${n}`, title: `Vec ${n}`, category: 'WORKSHOP', description: 'Popis', city: 'Košice',
-  district: 'Sever', distanceKm: 2.1, availableToday: n === 1,
+  district: 'Sever', distanceKm: 2.1, availableToday: n === 1, isDemo: false,
   dailyPriceCents: 500, hourlyPriceCents: null, dailyRentalEnabled: true, hourlyRentalEnabled: false,
   condition: 'GOOD', isActive: true, deactivatedByAdmin: false, createdAt: '2026-10-01T00:00:00Z',
   images: [], owner: { id: 'o', name: 'Jana K', city: 'Košice', avatarUrl: null, rating: { average: 4.8, count: 3 } },
@@ -51,12 +51,12 @@ describe('HomePage', () => {
     expect(screen.getByText('Bez kaucie. Bez zbytočného nakupovania. Len požičaj.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Preskúmať veci na prenájom' })).toHaveAttribute('href', '#veci');
     const badges = screen.getByRole('list', { name: 'Prečo je prenájom bezpečný' });
-    for (const b of ['Bez kaucie', 'Ochrana prenájmu v cene', 'Bezpečná platba', 'Hodnotenia používateľov']) expect(within(badges).getByText(b)).toBeInTheDocument();
+    for (const b of ['Bez kaucie', 'Ochrana prenájmu v cene', 'Jasná cena vopred', 'Hodnotenia používateľov']) expect(within(badges).getByText(b)).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Požičaj si v svojom okolí' })).toBeInTheDocument();
     // Trust section with the four cards
     const trust = screen.getByRole('heading', { name: /Požičaj si bez kaucie/ }).closest('section')!;
     expect(within(trust).getByText(/nemusíš viazať peniaze za zálohu/)).toBeInTheDocument();
-    for (const t of ['Bez kaucie', 'Ochrana prenájmu v cene', 'Bezpečná platba', 'Riešenie škôd']) expect(within(trust).getByRole('heading', { name: t })).toBeInTheDocument();
+    for (const t of ['Bez kaucie', 'Ochrana prenájmu v cene', 'Jasná cena vopred', 'Riešenie škôd']) expect(within(trust).getByRole('heading', { name: t })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ako to funguje' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Prečo ShareOn' })).toBeInTheDocument();
     expect(screen.getByText('Dostupné veci od ľudí v Košiciach')).toBeInTheDocument();

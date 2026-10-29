@@ -6,7 +6,7 @@ interface AuthState {
   user: Me | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { name: string; email: string; password: string; phone: string; city: string }) => Promise<void>;
+  register: (data: { name: string; email: string; password: string; phone: string; city: string; acceptTerms: boolean }) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }

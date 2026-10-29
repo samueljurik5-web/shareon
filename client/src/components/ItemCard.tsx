@@ -15,6 +15,7 @@ const MAX_STAGGER_MS = 240;
 /** Card badges: availability today + rental mode ("Na hodiny" when hourly is possible, else "Na dni"). */
 const badgesFor = (item: Item) => {
   const out: { label: string; className: string }[] = [];
+  if (item.isDemo) out.push({ label: 'Ukážka', className: 'badge-warn' });
   if (item.availableToday) out.push({ label: 'Dostupné dnes', className: 'badge-info' });
   out.push(item.hourlyRentalEnabled ? { label: 'Na hodiny', className: '' } : { label: 'Na dni', className: '' });
   return out;

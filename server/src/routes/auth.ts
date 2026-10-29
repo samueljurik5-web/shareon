@@ -5,7 +5,9 @@ import { prisma } from '../lib/prisma.js';
 import { parseBody } from '../middleware/validate.js';
 import { currentUser, requireAuth, signToken } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
-import { conflict, unauthorized } from '../lib/errors.js';
+import { conflict, forbidden, unauthorized } from '../lib/errors.js';
+import { env } from '../config/env.js';
+import { trackEvent } from '../services/events.js';
 import { privateUser } from '../lib/serialize.js';
 import { userRatingSummary, userRentalStats } from '../services/stats.js';
 
@@ -29,6 +31,7 @@ const registerSchema = z.object({
     .regex(/[0-9]/, 'Heslo musí obsahovať aspoň jedno číslo.'),
   phone: phoneSchema,
   city: z.string({ required_error: 'Mesto je povinné.' }).trim().min(2, 'Zadaj mesto.').max(80),
+  acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Na registráciu potrebujeme tvoj súhlas s podmienkami používania.' }) }),
 });
 
 const loginSchema = z.object({
@@ -42,8 +45,9 @@ router.post('/register', authLimiter, async (req, res) => {
   if (exists) throw conflict('Účet s týmto e-mailom už existuje.');
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
   const user = await prisma.user.create({
-    data: { name: data.name, email: data.email, phone: data.phone, city: data.city, passwordHash },
+    data: { name: data.name, email: data.email, phone: data.phone, city: data.city, passwordHash, termsAcceptedAt: new Date() },
   });
+  await trackEvent('register');
   res.status(201).json({ token: signToken(user), user: privateUser(user) });
 });
 
@@ -56,6 +60,9 @@ router.post('/login', authLimiter, async (req, res) => {
   const ok = await bcrypt.compare(data.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok) throw unauthorized('Nesprávny e-mail alebo heslo.');
   if (!user.isActive) throw unauthorized('Tento účet bol deaktivovaný. Kontaktuj podporu.');
+  if (user.isDemo && env.NODE_ENV === 'production' && !env.ALLOW_DEMO_LOGIN) {
+    throw forbidden('Ukážkový účet slúži len na ukážku ponúk. Vytvor si vlastný účet – je to zadarmo.');
+  }
   res.json({ token: signToken(user), user: privateUser(user) });
 });
 

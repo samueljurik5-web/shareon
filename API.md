@@ -102,6 +102,16 @@ Status actions:
 |---|---|---|---|
 | POST | `/feedback` | 🔓 (rate limited 10/h) | `{ type: LIKE\|BUG\|FEATURE\|TESTER, contact? (name or e-mail), message (5–2000) }` – stored, readable by admins only |
 
+## Launch / demand validation
+| Method | Path | | |
+|---|---|---|---|
+| POST | `/launch/waitlist` | 🔓 (20/h) | `{ email, role: BORROW\|LEND\|BOTH, district?, consent: true }` – one row per e-mail (201 new, 200 updated) |
+| POST | `/launch/demand` | 🔓 (20/h) | `{ what, email?, district?, consent (required with e-mail) }` – "Čo hľadáš" |
+| POST | `/launch/events` | 🔓 (300/15 min) | `{ name: visit_home\|view_search\|view_item\|view_sample_item\|rent_click\|add_item_open }` → 204; anonymous daily counter |
+| GET | `/admin/insights?days=30` | 👑 | funnel counts (client + server events: search, rental_request, register, item_created, waitlist, demand, feedback), daily rows, top / zero-result searches, waitlist, demand |
+
+`GET /items?q=…` stores the search text (lower-cased, no user/IP) with its result count. Sample listings (`isDemo`) are listed after real ones and `POST /rental-requests` on them returns 409. Registration requires `acceptTerms: true` (stored as `termsAcceptedAt`).
+
 ## Reviews
 | Method | Path | | |
 |---|---|---|---|

@@ -1,10 +1,36 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { api, resetDb, createUser } from './helpers.js';
+import { prisma } from '../src/lib/prisma.js';
+import { env } from '../src/config/env.js';
 
-const valid = { name: 'Jana Nová', email: 'jana.nova@example.sk', password: 'Heslo12345', phone: '+421 905 123 456', city: 'Košice' };
+const valid = { name: 'Jana Nová', email: 'jana.nova@example.sk', password: 'Heslo12345', phone: '+421 905 123 456', city: 'Košice', acceptTerms: true };
 
 describe('auth', () => {
   beforeEach(resetDb);
+
+  it('requires accepting the terms and stores when they were accepted', async () => {
+    const withoutConsent: Partial<typeof valid> = { ...valid };
+    delete withoutConsent.acceptTerms;
+    const res = await api().post('/api/auth/register').send(withoutConsent).expect(400);
+    expect(JSON.stringify(res.body)).toContain('súhlas s podmienkami');
+    await api().post('/api/auth/register').send(valid).expect(201);
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: valid.email } });
+    expect(user.termsAcceptedAt).toBeInstanceOf(Date);
+  });
+
+  it('blocks built-in demo accounts in production (public password), not in development', async () => {
+    const { user } = await createUser();
+    await prisma.user.update({ where: { id: user.id }, data: { isDemo: true } });
+    await api().post('/api/auth/login').send({ email: user.email, password: 'Heslo12345' }).expect(200);
+    const original = env.NODE_ENV;
+    env.NODE_ENV = 'production';
+    try {
+      const res = await api().post('/api/auth/login').send({ email: user.email, password: 'Heslo12345' }).expect(403);
+      expect(res.body.error.message).toContain('Ukážkový účet');
+    } finally {
+      env.NODE_ENV = original;
+    }
+  });
 
   it('registers a user, hashes the password and never returns it', async () => {
     const res = await api().post('/api/auth/register').send(valid).expect(201);

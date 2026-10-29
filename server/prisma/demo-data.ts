@@ -2,7 +2,7 @@
 import type { Category } from '@prisma/client';
 
 /** Bump when demo data needs a new one-time upgrade (tracked in AppSetting "demoDataVersion"). */
-export const DEMO_DATA_VERSION = 4;
+export const DEMO_DATA_VERSION = 5;
 
 /** Košice district of each demo owner (approximate location for distances – see src/lib/districts.ts). */
 export const DEMO_OWNER_DISTRICTS: Record<string, string> = {

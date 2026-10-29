@@ -97,6 +97,16 @@ const upgradeDemoData = async (prisma: PrismaClient) => {
     }
     console.info(`[demo-data] v4: realistic prices on ${repriced} demo items`);
   }
+  // v5: demo accounts and their listings become samples ("Ukážka"): no booking, no login in production,
+  //     existing sessions of demo accounts are revoked (the demo password is public).
+  if (current < 5) {
+    const users = await prisma.user.updateMany({
+      where: { email: { in: DEMO_EMAILS } },
+      data: { isDemo: true, tokenVersion: { increment: 1 } },
+    });
+    const items = await prisma.item.updateMany({ where: { owner: { email: { in: DEMO_EMAILS } } }, data: { isDemo: true } });
+    console.info(`[demo-data] v5: ${users.count} demo accounts locked, ${items.count} listings marked as samples`);
+  }
   await prisma.appSetting.upsert({
     where: { key: 'demoDataVersion' },
     create: { key: 'demoDataVersion', value: DEMO_DATA_VERSION },

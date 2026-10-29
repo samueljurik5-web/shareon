@@ -1,4 +1,4 @@
-import { Bell, Home, MapPin, MessageSquare, Plus, Search, ClipboardList, User, ShieldCheck, LogOut, Settings } from 'lucide-react';
+import { BarChart3, Bell, Home, MapPin, MessageSquare, Plus, Search, ClipboardList, User, ShieldCheck, LogOut, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
@@ -8,7 +8,7 @@ import type { Notification } from '../api/types';
 import { formatDateTime } from '../lib/format';
 import { Avatar } from './Avatar';
 import { ErrorBoundary } from './ErrorBoundary';
-import { INSTAGRAM_URL } from '../lib/site';
+import { INSTAGRAM_URL, OPERATOR } from '../lib/site';
 
 const desktopLinks = [
   { to: '/search', label: 'Objaviť' },
@@ -85,6 +85,8 @@ export function Layout() {
           <Link to="/protection" className="hover:text-ink">Ochrana prenájmu</Link>
           <Link to="/ako-to-funguje#kontakt" className="hover:text-ink">Kontakt</Link>
           <Link to="/#spatna-vazba" className="hover:text-ink">Spätná väzba</Link>
+          <Link to="/podmienky" className="hover:text-ink">Podmienky</Link>
+          <Link to="/ochrana-udajov" className="hover:text-ink">Ochrana osobných údajov</Link>
           {INSTAGRAM_URL ? (
             <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="hover:text-ink">Instagram</a>
           ) : (
@@ -92,7 +94,7 @@ export function Layout() {
           )}
         </nav>
         <p className="px-4">
-          ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
+          {OPERATOR.name ? `${OPERATOR.name}${OPERATOR.id ? `, IČO ${OPERATOR.id}` : ''} · ` : ''}ShareOn – testovacia verzia · Košice · Bez kaucie, s Ochranou prenájmu v cene · Platby sú zatiaľ simulované
           <span className="mx-2">·</span>
           <span title="Verzia aplikácie (git commit)">verzia {__APP_VERSION__}</span>
         </p>
@@ -201,6 +203,7 @@ export function AdminNav() {
     { to: '/admin/users', label: 'Používatelia', icon: User },
     { to: '/admin/items', label: 'Predmety', icon: ClipboardList },
     { to: '/admin/reports', label: 'Hlásenia', icon: Bell },
+    { to: '/admin/insights', label: 'Štatistiky', icon: BarChart3 },
     { to: '/admin/feedback', label: 'Spätná väzba', icon: MessageSquare },
     { to: '/admin/settings', label: 'Nastavenia', icon: Settings },
   ];

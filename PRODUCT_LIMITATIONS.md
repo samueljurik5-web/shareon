@@ -22,8 +22,10 @@ inviting real users.
 ## 3. Payments are not connected
 - **Real payments are not connected.** Rental price, Ochrana prenájmu and platform fee are calculated, stored with
   the reservation and *displayed* (“V testovacej verzii sa platby zatiaľ reálne nestrhávajú…”), but not charged.
-  The trust copy “Bezpečná platba cez ShareOn” describes the intended flow; before a real launch a payment provider
-  (e.g. Stripe Connect) must be implemented.
+  The UI says so honestly: the renter pays the owner at handover and does not pay Ochrana prenájmu during the test
+  (“Jasná cena vopred” instead of a payment promise). A payment provider (e.g. Stripe Connect) is needed before charging.
+- **Sample listings.** The 15 demo items are labelled “Ukážka” and cannot be booked; demo accounts (public password)
+  cannot log in in production (`ALLOW_DEMO_LOGIN` unset).
 
 ## 4. Compensation decisions are not automatic
 - Opening a claim never approves or pays anything. The admin changes its status

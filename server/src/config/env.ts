@@ -17,6 +17,17 @@ const schema = z.object({
     .string()
     .default('true')
     .transform((v) => v === 'true'),
+  // Built-in demo accounts (public password) are blocked in production unless explicitly allowed.
+  ALLOW_DEMO_LOGIN: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  // E-mail notifications (optional). Without RESEND_API_KEY no e-mails are sent.
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
+  /** Public URL used in e-mail links; Render sets RENDER_EXTERNAL_URL automatically. */
+  PUBLIC_APP_URL: z.string().url().optional(),
+  RENDER_EXTERNAL_URL: z.string().url().optional(),
   // Payments – only "mock" exists. A real provider must be implemented before production use.
   PAYMENT_PROVIDER: z.enum(['mock']).default('mock'),
   // Real insurance – ALL of these must be set (and legally reviewed) before INSURANCE mode can be enabled.

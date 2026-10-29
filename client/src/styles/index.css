@@ -2,7 +2,7 @@
 
 /* ───────────────────────── Neon Night ShareOn – design tokens ───────────────────────── */
 @theme {
-  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-night: #0b0d1a;          /* background */
   --color-night-2: #13162a;        /* secondary background */

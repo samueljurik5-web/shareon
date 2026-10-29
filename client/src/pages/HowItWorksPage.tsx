@@ -44,7 +44,7 @@ export function HowItWorksPage() {
             Ostatné otázky: <a className="font-semibold text-neon-blue hover:underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
           </p>
         ) : (
-          <p className="text-sm text-ink-3">Kontaktný e-mail doplníme čoskoro.</p>
+          <p className="text-sm text-ink-3">Kontaktný e-mail doplníme čoskoro. Dovtedy nám napíš cez spätnú väzbu na hlavnej stránke.</p>
         )}
       </section>
     </div>

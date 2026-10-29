@@ -19,6 +19,7 @@ import uploadRoutes from './routes/uploads.js';
 import notificationRoutes from './routes/notifications.js';
 import settingsRoutes from './routes/settings.js';
 import feedbackRoutes from './routes/feedback.js';
+import launchRoutes from './routes/launch.js';
 import pricingRoutes from './routes/pricing.js';
 
 export const createApp = () => {
@@ -32,8 +33,9 @@ export const createApp = () => {
         directives: {
           'default-src': ["'self'"],
           'script-src': ["'self'"],
-          'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          'font-src': ["'self'", 'https://fonts.gstatic.com'],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          // Fonts are bundled with the client (no third-party font requests).
+          'font-src': ["'self'", 'data:'],
           'img-src': ["'self'", 'data:', 'blob:'],
           'connect-src': ["'self'"],
           'object-src': ["'none'"],
@@ -87,6 +89,7 @@ export const createApp = () => {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api/feedback', feedbackRoutes);
+  app.use('/api/launch', launchRoutes);
   app.use('/api/pricing', pricingRoutes);
   app.use('/api', notFoundHandler);
 

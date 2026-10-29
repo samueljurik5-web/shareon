@@ -1,5 +1,5 @@
 import { SlidersHorizontal, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { get } from '../api/client';
 import type { Category, Condition, ItemCard } from '../api/types';
@@ -7,6 +7,8 @@ import { CategoryChips } from '../components/CategoryChips';
 import { ItemGrid } from '../components/ItemCard';
 import { CardSkeletons, EmptyState, ErrorState } from '../components/States';
 import { useAsync } from '../lib/useAsync';
+import { track } from '../lib/track';
+import { DemandForm } from '../components/LaunchForms';
 import { CONDITION_LABELS, EMPTY } from '../lib/format';
 
 const FILTER_KEYS = ['q', 'category', 'city', 'mode', 'minPrice', 'maxPrice', 'condition', 'from', 'to', 'sort'];
@@ -16,6 +18,7 @@ export function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const qs = params.toString();
   const { data, loading, error, reload } = useAsync(() => get<{ items: ItemCard[]; total: number }>(`/api/items?limit=48&${qs}`), [qs]);
+  useEffect(() => track('view_search'), []);
 
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -100,7 +103,12 @@ export function SearchPage() {
       )}
 
       {!loading && data && <p className="text-sm text-ink-3" aria-live="polite">Nájdené: {data.total}</p>}
-      {loading ? <CardSkeletons count={8} /> : error ? <ErrorState message={error.message} onRetry={reload} /> : data!.items.length ? <ItemGrid items={data!.items} /> : <EmptyState message={EMPTY.results} />}
+      {loading ? <CardSkeletons count={8} /> : error ? <ErrorState message={error.message} onRetry={reload} /> : data!.items.length ? <ItemGrid items={data!.items} /> : (
+        <div className="space-y-4">
+          <EmptyState message={EMPTY.results} />
+          <DemandForm key={params.get('q') ?? ''} initialWhat={params.get('q') ?? ''} compact />
+        </div>
+      )}
     </div>
   );
 }

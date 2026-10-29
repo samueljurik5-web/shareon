@@ -2,7 +2,7 @@ import {
   Bike, ChevronLeft, ChevronRight, Clock, Flame, Hammer, Laptop, PackagePlus, Search, Sofa, Sparkles, Sprout, Tent,
   type LucideIcon,
 } from 'lucide-react';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { get } from '../api/client';
 import type { Category, ItemCard as Item } from '../api/types';
@@ -12,6 +12,8 @@ import { useAsync } from '../lib/useAsync';
 import { HOW_STEPS, TRUST_CARDS, WHY_POINTS } from '../lib/content';
 import { TrustBadges } from '../components/Trust';
 import { FeedbackForm } from '../components/FeedbackForm';
+import { DemandForm, WaitlistForm } from '../components/LaunchForms';
+import { track } from '../lib/track';
 
 type ListRes = { items: Item[]; total: number };
 
@@ -67,6 +69,7 @@ export function HomePage() {
   };
 
   const items = main.data?.items ?? [];
+  useEffect(() => track('visit_home'), []);
 
   return (
     <div className="space-y-7 sm:space-y-8">
@@ -168,6 +171,7 @@ export function HomePage() {
               <div className="flex flex-wrap justify-center gap-2">
                 {selected.length > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => select([])}>Zobraziť všetko</button>}
                 <Link className="btn btn-primary btn-sm" to="/items/new">Pridať vec na prenájom</Link>
+                <a className="btn btn-ghost btn-sm" href="#hladam">Napíš nám, čo hľadáš</a>
               </div>
             }
           />
@@ -236,6 +240,11 @@ export function HomePage() {
         <Link to="/items/new" className="btn btn-secondary shrink-0 self-start sm:self-auto">Pridať vec na prenájom</Link>
       </section>
 
+      <div className="grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+        <WaitlistForm />
+        <DemandForm />
+      </div>
+
       <FeedbackForm />
     </div>
   );
@@ -251,7 +260,7 @@ function NoDepositSection() {
           <span aria-hidden>🛡️</span><span className="text-gradient">Požičaj si bez kaucie</span>
         </h2>
         <p className="mt-3 max-w-3xl text-ink-2 sm:text-lg">
-          V ShareOn nemusíš viazať peniaze za zálohu. Pri každom prenájme máš Ochranu prenájmu v cene — bezpečnú platbu, fotodokumentáciu a riešenie škôd priamo v aplikácii.
+          V ShareOn nemusíš viazať peniaze za zálohu. Pri každom prenájme máš Ochranu prenájmu v cene — jasnú cenu vopred, fotodokumentáciu stavu veci a riešenie škôd priamo v aplikácii.
         </p>
         <ul className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:gap-3 lg:grid-cols-4">
           {TRUST_CARDS.map(({ icon: Icon, title, text }) => (

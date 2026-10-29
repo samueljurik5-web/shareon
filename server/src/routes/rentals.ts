@@ -21,6 +21,7 @@ import {
 import { createReport } from '../services/reports.js';
 import { publicUser } from '../lib/serialize.js';
 import { PAYMENTS_SIMULATED_SK, PROTECTION_NOTICE_SK } from '../services/protection/index.js';
+import { trackEvent } from '../services/events.js';
 import { toDateOnlyString } from '../lib/dates.js';
 
 const router = Router();
@@ -46,6 +47,7 @@ router.post('/', async (req, res) => {
   const user = currentUser(req);
   const data = parseBody(createSchema, req);
   const rental = await createRentalRequest(user, data);
+  await trackEvent('rental_request');
   res.status(201).json({ rentalRequest: { id: rental.id, status: rental.status, totalCents: rental.totalCents } });
 });
 

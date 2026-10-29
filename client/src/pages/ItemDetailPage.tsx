@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, del, get, patch, post } from '../api/client';
 import type { ItemDetail, PriceBreakdown as Price, RentalMode, Review } from '../api/types';
 import { useAsync } from '../lib/useAsync';
+import { track } from '../lib/track';
 import {
   addDaysIso, CATEGORY_LABELS, formatKm, CONDITION_LABELS, DAILY_RULE_TEXT, daysLabel, formatDate, formatDateRangeLong, formatDayLong, formatEur,
   formatPeriod, HANDOVER_LABELS, hoursLabel, imageUrl, priceLabels, RENTAL_MODE_LABELS, todayIso,
@@ -29,6 +30,11 @@ export function ItemDetailPage() {
   const { toast, confirm } = useUi();
   const navigate = useNavigate();
   const [reportOpen, setReportOpen] = useState(false);
+  const viewEvent = data?.item ? (data.item.isDemo ? 'view_sample_item' : 'view_item') : null;
+  const viewedId = data?.item.id;
+  useEffect(() => {
+    if (viewEvent) track(viewEvent);
+  }, [viewEvent, viewedId]);
 
   if (loading) return <Spinner />;
   if (error || !data) return <ErrorState message={error?.message ?? 'Predmet sa nenašiel.'} onRetry={reload} />;
@@ -80,6 +86,7 @@ export function ItemDetailPage() {
             <span className="badge">Stav: {CONDITION_LABELS[item.condition]}</span>
             <NoDepositBadge />
             <span className="badge badge-protect"><ShieldCheck className="h-3 w-3" aria-hidden />Ochrana prenájmu v cene</span>
+            {item.isDemo && <span className="badge badge-warn">Ukážka</span>}
             {!item.isActive && <span className="badge badge-danger">Neaktívny</span>}
           </div>
           <div className="flex items-start justify-between gap-3">
@@ -95,8 +102,11 @@ export function ItemDetailPage() {
             <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" aria-hidden />{item.city}{item.district && ` – ${item.district}`}{item.distanceKm != null && <span className="text-ink-3">&nbsp;(cca {formatKm(item.distanceKm)} od centra)</span>}</span>
             <RatingInline average={item.rating.average} count={item.rating.count} />
           </div>
-          {!item.isOwner && (
+          {!item.isOwner && !item.isDemo && (
             <a href="#request-form" className="btn btn-primary w-full lg:hidden">Požičať si</a>
+          )}
+          {item.isDemo && (
+            <p className="notice notice-warn" role="note">Toto je ukážková ponuka – ukazuje, ako bude vyzerať skutočná vec na prenájom. Požičať si ju nie je možné.</p>
           )}
           <p className="whitespace-pre-line text-ink-2">{item.description}</p>
           <div className="grid gap-2 text-sm sm:grid-cols-2">
@@ -150,6 +160,8 @@ export function ItemDetailPage() {
             {!item.deactivatedByAdmin && <button className="btn btn-secondary w-full" onClick={toggleActive}>{item.isActive ? 'Skryť inzerát' : 'Zverejniť inzerát'}</button>}
             <Link to="/requests?tab=received" className="btn btn-ghost w-full">Prijaté žiadosti</Link>
           </div>
+        ) : item.isDemo ? (
+          <SampleNotice />
         ) : (
           <RentalRequestForm item={item} />
         )}
@@ -219,6 +231,7 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    track('rent_click');
     if (!user) return navigate('/login', { state: { from: `/items/${item.id}` } });
     if (!mode) return setErrors({ mode: 'Najprv vyber, či si chceš predmet požičať na hodiny alebo na dni.' });
     const errs: Record<string, string> = {};
@@ -367,6 +380,21 @@ function RentalRequestForm({ item }: { item: ItemDetail }) {
       )}
       <p className="text-xs text-ink-3">Bez kaucie. Kontaktné údaje sa zobrazia až po prijatí žiadosti. Časy sú v časovom pásme Bratislava.</p>
     </form>
+  );
+}
+
+/** Shown instead of the booking form on sample listings. */
+function SampleNotice() {
+  return (
+    <div className="card space-y-3 p-5">
+      <h2 className="text-lg font-bold">Ukážková ponuka</h2>
+      <p className="text-sm text-ink-2">
+        ShareOn práve spúšťame. Táto vec slúži len ako ukážka, aby si videl, ako bude prenájom fungovať – cena, Ochrana prenájmu a podmienky sú však skutočné.
+      </p>
+      <Link to="/#hladam" className="btn btn-primary w-full">Napíš nám, čo hľadáš</Link>
+      <Link to="/items/new" className="btn btn-secondary w-full">Pridať vlastnú vec na prenájom</Link>
+      <Link to="/#medzi-prvymi" className="btn btn-ghost w-full">Chcem byť medzi prvými</Link>
+    </div>
   );
 }
 

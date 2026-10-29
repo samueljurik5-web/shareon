@@ -4,6 +4,7 @@ import { ApiError, post } from '../api/client';
 import type { FeedbackType } from '../api/types';
 import { FEEDBACK_TYPE_LABELS, MVP_NOTICE } from '../lib/format';
 import { TextArea, TextField } from './Field';
+import { PrivacyNote } from './LaunchForms';
 
 const TYPES: FeedbackType[] = ['LIKE', 'BUG', 'FEATURE', 'TESTER'];
 
@@ -66,6 +67,7 @@ export function FeedbackForm() {
           <TextArea id="fb-message" label="Správa" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={2000} error={errors.message} placeholder="Čo sa ti páči, čo nefunguje alebo čo ti chýba?" />
           {errors.form && !errors.message && <p className="field-error" role="alert">{errors.form}</p>}
           <button className="btn btn-primary" disabled={busy}>{busy ? 'Odosielam…' : 'Odoslať spätnú väzbu'}</button>
+          <PrivacyNote />
         </form>
       )}
     </section>

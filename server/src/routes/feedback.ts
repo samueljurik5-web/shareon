@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { parseBody } from '../middleware/validate.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { feedbackLimiter } from '../middleware/rateLimit.js';
+import { trackEvent } from '../services/events.js';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ router.post('/', feedbackLimiter, optionalAuth, async (req, res) => {
   const feedback = await prisma.feedback.create({
     data: { type: data.type, contact: data.contact || null, message: data.message, userId: req.user?.id ?? null },
   });
+  await trackEvent('feedback');
   res.status(201).json({ feedback: { id: feedback.id } });
 });
 

@@ -96,7 +96,7 @@ const main = async () => {
     data: { name: 'ShareOn Admin', email: ADMIN_EMAIL, phone: '+421 900 000 000', city: 'Košice', role: 'ADMIN', passwordHash: adminHash },
   });
   const u = [] as { id: string }[];
-  for (const x of users) u.push(await prisma.user.create({ data: { ...x, city: 'Košice', passwordHash: userHash } }));
+  for (const x of users) u.push(await prisma.user.create({ data: { ...x, city: 'Košice', passwordHash: userHash, isDemo: true } }));
 
   const it = [] as Awaited<ReturnType<typeof prisma.item.create>>[];
   for (const [idx, x] of items.entries()) {
@@ -122,6 +122,7 @@ const main = async () => {
         condition: x.condition,
         availableFrom: d(-120),
         availableTo: d(240),
+        isDemo: true, // sample listing ("Ukážka") – cannot be booked
         declarationsAcceptedAt: new Date(),
         createdAt: new Date(Date.now() - (items.length - idx) * 36e5 * 20),
         images: { create: [{ url: x.image, position: 0 }] },

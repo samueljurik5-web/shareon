@@ -25,6 +25,8 @@ export interface ItemCard {
   district: string | null; distanceKm: number | null;
   /** server estimate: a rental could start today */
   availableToday: boolean;
+  /** Sample listing ("Ukážka") – shown, but cannot be booked */
+  isDemo: boolean;
   dailyPriceCents: number | null; hourlyPriceCents: number | null; dailyRentalEnabled: boolean; hourlyRentalEnabled: boolean;
   condition: Condition; isActive: boolean; deactivatedByAdmin: boolean; createdAt: string;
   images: { id: string; url: string }[];

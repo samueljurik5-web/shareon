@@ -18,6 +18,7 @@ import { addDaysToDate, zonedToUtc } from '../lib/time.js';
 import { publicUser } from '../lib/serialize.js';
 import { notifyAdmins } from '../services/notifications.js';
 import { DISTRICT_NAMES, distanceFromCenterKm } from '../lib/districts.js';
+import { logSearch, trackEvent } from '../services/events.js';
 
 const router = Router();
 
@@ -234,7 +235,10 @@ router.get('/', optionalAuth, async (req, res) => {
     const rented = new Map(counts.map((c) => [c.itemId, c._count._all]));
     items.sort((a, b) => (rented.get(b.id) ?? 0) - (rented.get(a.id) ?? 0));
   }
+  // Real listings before sample ("Ukážka") listings; Array.sort is stable, so the chosen order is kept.
+  items.sort((a, b) => Number(a.isDemo) - Number(b.isDemo));
   const total = items.length;
+  if (q.q && q.page === 1) await logSearch(q.q, q.category, total);
   const start = (q.page - 1) * q.limit;
   res.json({ items: items.slice(start, start + q.limit), total, page: q.page, limit: q.limit });
 });
@@ -286,6 +290,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       city: item.city,
       district: item.district,
       distanceKm: distanceFromCenterKm(item.district),
+      isDemo: item.isDemo,
       condition: item.condition,
       availableFrom: toDateOnlyString(item.availableFrom),
       availableTo: toDateOnlyString(item.availableTo),
@@ -350,6 +355,7 @@ router.post('/', requireAuth, async (req, res) => {
       images: { create: data.images.map((url, position) => ({ url, position })) },
     },
   });
+  await trackEvent('item_created');
   res.status(201).json({ item: { id: item.id } });
 });
 

@@ -10,6 +10,7 @@ import { ErrorState, Spinner } from '../components/States';
 import { addDaysIso, CATEGORY_LABELS, CONDITION_LABELS, daysLabel, hoursLabel, todayIso } from '../lib/format';
 import { useUi } from '../context/UiContext';
 import { useAuth } from '../context/AuthContext';
+import { track } from '../lib/track';
 import { KOSICE_DISTRICTS } from '../lib/districts';
 
 interface FormState {
@@ -48,6 +49,9 @@ const DECLARATIONS = [
 export function ItemFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
+  useEffect(() => {
+    if (!isEdit) track('add_item_open');
+  }, [isEdit]);
   const navigate = useNavigate();
   const { toast } = useUi();
   const { user } = useAuth();

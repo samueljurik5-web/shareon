@@ -70,7 +70,7 @@ export function ProtectionPage() {
             'Náhrada škody nie je automatická ani garantovaná.',
             'Každé hlásenie posudzuje človek podľa pravidiel a dôkazov.',
             'Bez fotiek a včasného nahlásenia je posúdenie ťažšie.',
-            'V testovacej verzii sa platby reálne nestrhávajú.',
+            'V testovacej verzii platíš majiteľovi pri odovzdaní – ShareOn platby ešte nespracúva.',
           ].map((t) => (
             <p key={t} className="flex gap-2 text-sm text-ink-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />{t}</p>
           ))}

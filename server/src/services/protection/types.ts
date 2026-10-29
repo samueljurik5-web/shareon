@@ -81,4 +81,5 @@ export const PROTECTION_NOTICE_SK =
 
 /** First public test version – payments are simulated. */
 export const MVP_NOTICE_SK = 'ShareOn je v prvej testovacej verzii. Pomôž nám ju zlepšiť svojou spätnou väzbou.';
-export const PAYMENTS_SIMULATED_SK = 'V testovacej verzii sa platby zatiaľ reálne nestrhávajú – suma sa len prehľadne zaznamená v rezervácii.';
+export const PAYMENTS_SIMULATED_SK =
+  'V testovacej verzii ShareOn ešte nespracúva platby – cenu prenájmu zaplatíš majiteľovi pri odovzdaní a Ochranu prenájmu počas testovania neplatíš.';

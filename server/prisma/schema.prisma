@@ -137,6 +137,10 @@ model User {
   isActive     Boolean  @default(true)
   /// Incremented on logout / deactivation to revoke all issued JWTs
   tokenVersion Int      @default(0)
+  /// Built-in demo account (public password) – cannot log in in production
+  isDemo       Boolean  @default(false)
+  /// When the user accepted the terms and acknowledged the privacy notice (registration)
+  termsAcceptedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -156,6 +160,8 @@ model User {
   handoverRecords HandoverRecord[]
   quotes          ProtectionQuote[]
   feedback        Feedback[]
+  waitlist        WaitlistSignup[]
+  demandRequests  DemandRequest[]
 
   @@index([role])
   @@index([city])
@@ -194,6 +200,8 @@ model Item {
   /// Set when an admin deactivates the listing – owner cannot re-activate
   deactivatedByAdmin     Boolean       @default(false)
   protectionEligible     Boolean       @default(true)
+  /// Sample listing ("Ukážka") – shown, but cannot be booked
+  isDemo                 Boolean       @default(false)
   /// Owner declarations (right to offer, accurate description, damage disclosed, photos current)
   declarationsAcceptedAt DateTime
   createdAt              DateTime      @default(now())
@@ -553,12 +561,15 @@ model Notification {
   body      String?
   link      String?
   readAt    DateTime?
+  /// Set once the e-mail for this notification was sent (or skipped) by the mail outbox
+  emailedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
+  @@index([emailedAt, createdAt])
 }
 
 model AppSetting {
@@ -590,4 +601,61 @@ model Feedback {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
+}
+
+enum WaitlistRole {
+  BORROW
+  LEND
+  BOTH
+}
+
+/// "Chcem byť medzi prvými" – early-interest list (one row per e-mail).
+model WaitlistSignup {
+  id        String       @id @default(cuid())
+  email     String       @unique
+  role      WaitlistRole
+  district  String?
+  userId    String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+/// "Daj nám vedieť, čo hľadáš" – demand for things that are not offered yet.
+model DemandRequest {
+  id        String   @id @default(cuid())
+  what      String
+  email     String?
+  district  String?
+  userId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+/// What people search for (text only, no user/IP) – zero results show missing supply.
+model SearchLog {
+  id          String   @id @default(cuid())
+  query       String
+  category    String?
+  resultCount Int
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([query])
+}
+
+/// Anonymous daily counters for the launch funnel (no cookies, no visitor ids).
+model EventCount {
+  day   DateTime @db.Date
+  name  String
+  count Int      @default(0)
+
+  @@id([day, name])
 }

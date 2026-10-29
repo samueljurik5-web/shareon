@@ -44,6 +44,11 @@ To stop seeding demo data (e.g. before real users), set `DEMO_SEED_ON_EMPTY=fals
 | `RATE_LIMIT_ENABLED` | no | `true` |
 | `CORS_ORIGINS` | only if the frontend is hosted elsewhere | e.g. `https://shareon.vercel.app` |
 | `INSURANCE_*` | **must stay empty** | – |
+| `ALLOW_DEMO_LOGIN` | no | leave unset/`false`: built-in demo accounts (public password) cannot log in in production; their listings are samples ("Ukážka") that cannot be booked |
+| `RESEND_API_KEY` | no | enables e-mail notifications (resend.com); without it notifications stay in-app only |
+| `MAIL_FROM` | with `RESEND_API_KEY` | sender on a domain verified in Resend, e.g. `ShareOn <noreply@tvojadomena.sk>` |
+| `PUBLIC_APP_URL` | no | link base in e-mails; defaults to Render's `RENDER_EXTERNAL_URL` |
+| `VITE_OPERATOR_NAME`, `VITE_OPERATOR_ID`, `VITE_OPERATOR_ADDRESS` | yes before a public launch (build time) | operator shown in the footer, `/podmienky` and `/ochrana-udajov` (name, IČO, address) |
 | `VITE_INSTAGRAM_URL` | no (build time) | public `https://…` Instagram profile for the footer; without it the footer shows „Instagram – čoskoro“ |
 | `VITE_CONTACT_EMAIL` | no (build time) | public contact e-mail shown on `/ako-to-funguje#kontakt` |
 

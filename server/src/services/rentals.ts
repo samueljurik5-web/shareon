@@ -127,10 +127,15 @@ export interface CreateRentalInput {
   acceptProtectionDisclaimer?: boolean;
 }
 
+/** Sample listings show what ShareOn looks like – they cannot be booked. */
+export const DEMO_ITEM_MESSAGE =
+  'Toto je ukážková ponuka – požičať si ju nie je možné. Pridaj vlastnú vec alebo nám napíš, čo hľadáš.';
+
 export const createRentalRequest = async (renter: User, input: CreateRentalInput) => {
   const item = await prisma.item.findUnique({ where: { id: input.itemId }, include: { owner: true } });
   if (!item || !item.isActive || !item.owner.isActive) throw notFound('Predmet sa nenašiel alebo nie je dostupný.');
   if (item.ownerId === renter.id) throw badRequest('Nemôžeš si požičať vlastný predmet.');
+  if (item.isDemo) throw conflict(DEMO_ITEM_MESSAGE);
 
   // Everything (availability, duration, price, fees) is recalculated here – client values are ignored.
   const { period, price } = await quoteRental(item, input, renter.id);

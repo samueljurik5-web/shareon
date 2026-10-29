@@ -105,7 +105,7 @@ export const RATING_LABELS: Record<number, string> = { 1: 'Veľmi zlé', 2: 'Sla
 export const PROTECTION_HINT = 'Chráni tvoj prenájom a pomáha riešiť prípadné škody alebo spory.';
 export const PROTECTION_NOTICE_SK =
   'Ochrana prenájmu je služba ShareOn, ktorá pomáha riešiť prípadné škody a spory. Každé hlásenie posudzuje tím ShareOn podľa pravidiel a dostupných dôkazov – náhrada nie je automatická ani garantovaná.';
-export const PAYMENTS_SIMULATED = 'V testovacej verzii sa platby zatiaľ reálne nestrhávajú – suma sa len prehľadne zaznamená v rezervácii.';
+export const PAYMENTS_SIMULATED = 'V testovacej verzii ShareOn ešte nespracúva platby – cenu prenájmu zaplatíš majiteľovi pri odovzdaní a Ochranu prenájmu počas testovania neplatíš.';
 export const MVP_NOTICE = 'ShareOn je v prvej testovacej verzii. Pomôž nám ju zlepšiť svojou spätnou väzbou.';
 export const DAMAGE_DISCLAIMER =
   'ShareOn neposkytuje automatické rozhodnutie o škode ani automatickú náhradu. Prípad posudzuje administrátor podľa dostupných dôkazov a pravidiel platformy.';
