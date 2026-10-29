@@ -52,6 +52,11 @@ export function Layout() {
           <div className="ml-auto flex items-center gap-2">
             {user ? (
               <>
+                {user.role === 'ADMIN' && (
+                  <Link to="/admin/insights" className="btn btn-secondary btn-sm lg:hidden" aria-label="Administrácia – štatistiky">
+                    <Settings className="h-4 w-4" aria-hidden />Admin
+                  </Link>
+                )}
                 <NotificationsButton unread={user.unreadNotifications ?? 0} />
                 <Link to="/profile" className="hidden items-center gap-2 rounded-full bg-card py-1 pl-1 pr-3 text-sm font-semibold sm:flex" aria-label="Profil">
                   <Avatar name={user.name} url={user.avatarUrl} size={30} />
