@@ -18,6 +18,23 @@ describe('auth', () => {
     expect(user.termsAcceptedAt).toBeInstanceOf(Date);
   });
 
+  it('accounts listed in ADMIN_EMAILS become admins at registration or login', async () => {
+    const saved = env.ADMIN_EMAILS;
+    try {
+      env.ADMIN_EMAILS = ' Jana.Nova@example.sk , other@x.sk';
+      const reg = await api().post('/api/auth/register').send(valid).expect(201);
+      expect(reg.body.user.role).toBe('ADMIN');
+      const { user } = await createUser();
+      await api().post('/api/auth/login').send({ email: user.email, password: 'Heslo12345' }).expect(200);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).role).toBe('USER');
+      env.ADMIN_EMAILS = `${saved ?? ''},${user.email}`;
+      const login = await api().post('/api/auth/login').send({ email: user.email, password: 'Heslo12345' }).expect(200);
+      expect(login.body.user.role).toBe('ADMIN');
+    } finally {
+      env.ADMIN_EMAILS = saved;
+    }
+  });
+
   it('blocks built-in demo accounts in production (public password), not in development', async () => {
     const { user } = await createUser();
     await prisma.user.update({ where: { id: user.id }, data: { isDemo: true } });

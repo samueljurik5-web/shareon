@@ -44,21 +44,35 @@ router.post('/register', authLimiter, async (req, res) => {
   const exists = await prisma.user.findUnique({ where: { email: data.email } });
   if (exists) throw conflict('Účet s týmto e-mailom už existuje.');
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
-  const user = await prisma.user.create({
-    data: { name: data.name, email: data.email, phone: data.phone, city: data.city, passwordHash, termsAcceptedAt: new Date() },
-  });
+  const user = await applyConfiguredAdmin(
+    await prisma.user.create({
+      data: { name: data.name, email: data.email, phone: data.phone, city: data.city, passwordHash, termsAcceptedAt: new Date() },
+    }),
+  );
   await trackEvent('register');
   res.status(201).json({ token: signToken(user), user: privateUser(user) });
 });
+
+/** Accounts listed in ADMIN_EMAILS become admins (only whoever controls the server settings can grant this). */
+const adminEmails = () =>
+  (env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+const applyConfiguredAdmin = async <U extends { id: string; email: string; role: string }>(user: U): Promise<U> => {
+  if (user.role === 'ADMIN' || !adminEmails().includes(user.email.toLowerCase())) return user;
+  return (await prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } })) as unknown as U;
+};
 
 // Pre-computed hash so that login timing does not reveal whether an e-mail exists.
 const DUMMY_HASH = bcrypt.hashSync('timing-safe-dummy-password', BCRYPT_ROUNDS);
 
 router.post('/login', authLimiter, async (req, res) => {
   const data = parseBody(loginSchema, req);
-  const user = await prisma.user.findUnique({ where: { email: data.email } });
-  const ok = await bcrypt.compare(data.password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !ok) throw unauthorized('Nesprávny e-mail alebo heslo.');
+  const found = await prisma.user.findUnique({ where: { email: data.email } });
+  const ok = await bcrypt.compare(data.password, found?.passwordHash ?? DUMMY_HASH);
+  if (!found || !ok) throw unauthorized('Nesprávny e-mail alebo heslo.');
+  const user = await applyConfiguredAdmin(found);
   if (!user.isActive) throw unauthorized('Tento účet bol deaktivovaný. Kontaktuj podporu.');
   if (user.isDemo && env.NODE_ENV === 'production' && !env.ALLOW_DEMO_LOGIN) {
     throw forbidden('Ukážkový účet slúži len na ukážku ponúk. Vytvor si vlastný účet – je to zadarmo.');
