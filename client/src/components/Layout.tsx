@@ -91,6 +91,7 @@ export function Layout() {
           <Link to="/protection" className="hover:text-ink">Ochrana prenájmu</Link>
           <Link to="/ako-to-funguje#kontakt" className="hover:text-ink">Kontakt</Link>
           <Link to="/#spatna-vazba" className="hover:text-ink">Spätná väzba</Link>
+          <Link to="/dotaznik" className="hover:text-ink">Dotazník</Link>
           <Link to="/podmienky" className="hover:text-ink">Podmienky</Link>
           <Link to="/ochrana-udajov" className="hover:text-ink">Ochrana osobných údajov</Link>
           {site.instagramUrl ? (

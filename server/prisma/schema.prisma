@@ -663,3 +663,25 @@ model EventCount {
 
   @@id([day, name])
 }
+
+/// Short market survey (/dotaznik) – anonymous unless the person leaves an e-mail with consent.
+model SurveyResponse {
+  id             String   @id @default(cuid())
+  /// OFTEN | SOMETIMES | NO
+  boughtUnused   String
+  /// Category keys (TOOLS, GARDEN, SPORT, CAMPING, ELECTRONICS, KIDS, OTHER)
+  categories     String[]
+  categoryOther  String?
+  /// YES_SURE | RATHER_YES | RATHER_NO | NO
+  wouldBorrow    String
+  /// Barrier keys (DEPOSIT, DAMAGE, TRUST, HASSLE, NOTHING)
+  barriers       String[]
+  /// YES | DONT_KNOW | NO
+  noDepositHelps String
+  /// YES | MAYBE | NO
+  wouldLend      String
+  email          String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}

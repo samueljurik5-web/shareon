@@ -43,6 +43,7 @@ export function PrivacyPage() {
           <li><strong className="text-ink">Účet:</strong> meno, e-mail, telefón, mesto, heslo (len v zašifrovanej podobe), voliteľne fotka a popis – na vytvorenie účtu a sprostredkovanie prenájmov (plnenie zmluvy).</li>
           <li><strong className="text-ink">Ponuky a prenájmy:</strong> veci, fotky, termíny, ceny, správy, záznamy o odovzdaní a vrátení, hodnotenia – na fungovanie prenájmov (plnenie zmluvy).</li>
           <li><strong className="text-ink">Hlásenia problémov:</strong> popis, fotky a poznámka ku kontaktu – na riešenie škôd a sporov (plnenie zmluvy, oprávnený záujem).</li>
+          <li><strong className="text-ink">Dotazník:</strong> odpovede na otázky o požičiavaní, voliteľne e-mail – na overenie záujmu o službu (oprávnený záujem; e-mail len so súhlasom, ktorý môžeš kedykoľvek odvolať).</li>
           <li><strong className="text-ink">Spätná väzba, „Čo hľadáš“ a „Chcem byť medzi prvými“:</strong> správa, voliteľne meno alebo e-mail a mestská časť – na zlepšenie služby a aby sme ťa mohli kontaktovať, keď bude dostupné to, o čo máš záujem (súhlas, ktorý môžeš kedykoľvek odvolať).</li>
           <li><strong className="text-ink">Štatistiky:</strong> anonymné denné počty (napr. koľko ľudí otvorilo stránku alebo poslalo žiadosť) a texty vyhľadávaní – bez cookies, bez IP adresy a bez identifikácie návštevníka (oprávnený záujem na zlepšovaní služby).</li>
         </ul>
@@ -62,7 +63,7 @@ export function PrivacyPage() {
         <ul>
           <li>Účet a ponuky – kým účet používaš; po zrušení účtu ich vymažeme, okrem údajov o prenájmoch a hláseniach.</li>
           <li>Prenájmy, hodnotenia a hlásenia – najviac 3 roky od skončenia prenájmu kvôli možným sporom.</li>
-          <li>Spätná väzba, „Čo hľadáš“ a zoznam záujemcov – kým súhlas neodvoláš, najviac 2 roky.</li>
+          <li>Dotazník, spätná väzba, „Čo hľadáš“ a zoznam záujemcov – kým súhlas neodvoláš, najviac 2 roky.</li>
         </ul>
       </section>
       <section>

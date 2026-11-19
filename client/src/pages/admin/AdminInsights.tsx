@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, Spinner } from '../../components/States';
 import { useAsync } from '../../lib/useAsync';
 import { formatDateTime } from '../../lib/format';
 import { Table, Td } from './AdminDashboard';
+import { SURVEY_QUESTIONS, surveyLabel, type SurveyKey } from '../../lib/survey';
 
 type Role = 'BORROW' | 'LEND' | 'BOTH';
 interface Insights {
@@ -16,7 +17,11 @@ interface Insights {
   zeroResultSearches: { query: string; count: number }[];
   waitlist: { byRole: Partial<Record<Role, number>>; entries: { id: string; email: string; role: Role; city: string | null; district: string | null; wish: string | null; createdAt: string }[] };
   demand: { id: string; what: string; email: string | null; district: string | null; createdAt: string }[];
+  survey: SurveySummary;
 }
+
+interface SurveyEntry { boughtUnused: string; categories: string[]; categoryOther: string | null; wouldBorrow: string; barriers: string[]; noDepositHelps: string; wouldLend: string; email: string | null; createdAt: string }
+interface SurveySummary { total: number; withEmail: number; questions: Record<SurveyKey, { value: string; count: number }[]>; otherCategories: string[]; entries: SurveyEntry[] }
 
 const ROLE_LABELS: Record<Role, string> = { BORROW: 'Chce si požičiavať', LEND: 'Chce požičiavať', BOTH: 'Oboje' };
 const DAILY_EVENTS = ['visit_home', 'view_item', 'rent_click', 'rental_request', 'register', 'item_created', 'waitlist', 'demand'];
@@ -72,6 +77,8 @@ function Content({ data }: { data: Insights }) {
           </div>
         ))}
       </section>
+
+      <SurveySection survey={data.survey} />
 
       <section className="space-y-2">
         <h2 className="text-lg font-bold">Lievik</h2>
@@ -165,5 +172,58 @@ function Content({ data }: { data: Insights }) {
         )}
       </section>
     </div>
+  );
+}
+
+const pctOf = (n: number, total: number) => (total ? Math.round((n / total) * 100) : 0);
+
+/** Survey results (all time) – share of respondents per answer, ready to quote in a pitch. */
+function SurveySection({ survey }: { survey: SurveySummary }) {
+  const exportCsv = () =>
+    downloadCsv('shareon-dotaznik.csv', [
+      ['Dátum', ...SURVEY_QUESTIONS.map((q) => q.title), 'Iné', 'E-mail'],
+      ...survey.entries.map((e) => [
+        formatDateTime(e.createdAt),
+        ...SURVEY_QUESTIONS.map((q) => {
+          const v = e[q.key];
+          return (Array.isArray(v) ? v : [v]).map((x) => surveyLabel(q.key, x)).join(', ');
+        }),
+        e.categoryOther,
+        e.email,
+      ]),
+    ]);
+  return (
+    <section className="space-y-3" aria-labelledby="survey-heading">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="survey-heading" className="text-lg font-bold">
+          Dotazník ({survey.total})
+          <span className="ml-2 text-sm font-normal text-ink-2">s e-mailom: {survey.withEmail} · odkaz: <a href="/dotaznik" className="text-neon-blue">shareon.sk/dotaznik</a></span>
+        </h2>
+        {survey.total > 0 && (
+          <button className="btn btn-secondary btn-sm" onClick={exportCsv}><Download className="h-4 w-4" aria-hidden />Stiahnuť CSV</button>
+        )}
+      </div>
+      {survey.total === 0 ? <EmptyState message="Zatiaľ nikto nevyplnil dotazník. Zdieľaj odkaz shareon.sk/dotaznik." /> : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {SURVEY_QUESTIONS.map((q) => (
+            <div key={q.key} className="card min-w-0 space-y-2 p-4">
+              <p className="text-sm font-bold">{q.title}</p>
+              <ul className="space-y-1.5">
+                {survey.questions[q.key].map(({ value, count }) => {
+                  const p = pctOf(count, survey.total);
+                  return (
+                    <li key={value} className="text-sm">
+                      <div className="flex justify-between gap-2"><span className="text-ink-2">{surveyLabel(q.key, value)}</span><span className="whitespace-nowrap font-semibold tabular-nums">{p} % <span className="font-normal text-ink-3">({count})</span></span></div>
+                      <div className="mt-1 h-1.5 rounded-full bg-line" aria-hidden><div className="h-1.5 rounded-full bg-grad-primary" style={{ width: `${p}%` }} /></div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {q.key === 'categories' && survey.otherCategories.length > 0 && <p className="text-xs text-ink-3">Iné: {survey.otherCategories.join(', ')}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

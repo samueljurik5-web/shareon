@@ -7,6 +7,7 @@ import { eventsLimiter, launchFormLimiter } from '../middleware/rateLimit.js';
 import { DISTRICT_NAMES } from '../lib/districts.js';
 import { CLIENT_EVENTS, trackEvent } from '../services/events.js';
 import { notifyOperator } from '../services/mail.js';
+import { SURVEY } from '../services/survey.js';
 
 /** Launch / demand validation: waitlist, "Čo hľadáš", anonymous funnel events. */
 const router = Router();
@@ -69,6 +70,55 @@ router.post('/demand', launchFormLimiter, optionalAuth, async (req, res) => {
     ['Hľadá', data.what],
     ['E-mail', data.email],
     ['Mestská časť', data.district],
+  ]);
+  res.status(201).json({ ok: true });
+});
+
+const pick = (msg: string) => ({ errorMap: () => ({ message: msg }) });
+const surveySchema = z
+  .object({
+    boughtUnused: z.enum(SURVEY.boughtUnused, pick('Vyber odpoveď.')),
+    categories: z.array(z.enum(SURVEY.categories)).max(SURVEY.categories.length).default([]),
+    categoryOther: z.string().trim().max(120, 'Text je príliš dlhý.').optional().nullable(),
+    wouldBorrow: z.enum(SURVEY.wouldBorrow, pick('Vyber odpoveď.')),
+    barriers: z.array(z.enum(SURVEY.barriers)).max(SURVEY.barriers.length).default([]),
+    noDepositHelps: z.enum(SURVEY.noDepositHelps, pick('Vyber odpoveď.')),
+    wouldLend: z.enum(SURVEY.wouldLend, pick('Vyber odpoveď.')),
+    email: email.optional().nullable().or(z.literal('')),
+    consent: z.boolean().optional(),
+  })
+  .refine((d) => !d.email || d.consent === true, { message: 'Potvrď, že ťa môžeme kontaktovať.', path: ['consent'] });
+
+/** "Dotazník" – short market survey; an e-mail (with consent) also joins the waitlist. */
+router.post('/survey', launchFormLimiter, optionalAuth, async (req, res) => {
+  const data = parseBody(surveySchema, req);
+  const mail = data.email || null;
+  await prisma.surveyResponse.create({
+    data: {
+      boughtUnused: data.boughtUnused,
+      categories: [...new Set(data.categories)],
+      categoryOther: data.categories.includes('OTHER') ? data.categoryOther || null : null,
+      wouldBorrow: data.wouldBorrow,
+      barriers: [...new Set(data.barriers)],
+      noDepositHelps: data.noDepositHelps,
+      wouldLend: data.wouldLend,
+      email: mail,
+    },
+  });
+  await trackEvent('survey');
+  if (mail) {
+    const existing = await prisma.waitlistSignup.findUnique({ where: { email: mail } });
+    if (!existing) {
+      const role = data.wouldLend === 'YES' ? 'BOTH' : 'BORROW';
+      await prisma.waitlistSignup.create({ data: { email: mail, role, userId: req.user?.id ?? null } });
+      await trackEvent('waitlist');
+    }
+  }
+  notifyOperator('nový vyplnený dotazník', [
+    ['Požičal by si si', data.wouldBorrow],
+    ['Bez zálohy pomôže', data.noDepositHelps],
+    ['Požičal by svoje veci', data.wouldLend],
+    ['E-mail', mail],
   ]);
   res.status(201).json({ ok: true });
 });

@@ -19,6 +19,7 @@ export const EVENT_LABELS: Record<string, string> = {
   waitlist: 'Zápis „Chcem byť medzi prvými“',
   demand: 'Odoslané „Čo hľadáš“',
   feedback: 'Spätná väzba',
+  survey: 'Vyplnený dotazník',
 };
 
 const today = () => new Date(`${todayLocal()}T00:00:00Z`);

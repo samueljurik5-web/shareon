@@ -22,6 +22,7 @@ import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminFeedback } from './pages/admin/AdminFeedback';
 import { AdminInsights } from './pages/admin/AdminInsights';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { SurveyPage } from './pages/SurveyPage';
 
 export function App() {
   return (
@@ -40,6 +41,7 @@ export function App() {
         <Route path="/requests/:id" element={<RequireAuth><RequestDetailPage /></RequireAuth>} />
         <Route path="/protection" element={<ProtectionPage />} />
         <Route path="/ako-to-funguje" element={<HowItWorksPage />} />
+        <Route path="/dotaznik" element={<SurveyPage />} />
         <Route path="/podmienky" element={<TermsPage />} />
         <Route path="/ochrana-udajov" element={<PrivacyPage />} />
         <Route path="/reports/:id" element={<RequireAuth><ReportPage /></RequireAuth>} />
