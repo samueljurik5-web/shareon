@@ -9,7 +9,6 @@ import { audit } from '../services/audit.js';
 import { getSettings, settingsPatchSchema, updateSettings } from '../services/settings.js';
 import { adminSetReportStatus } from '../services/reports.js';
 import { EVENT_LABELS } from '../services/events.js';
-import { SURVEY } from '../services/survey.js';
 import { addDaysToDate, todayLocal, zonedToUtc } from '../lib/time.js';
 
 const router = Router();
@@ -127,27 +126,6 @@ router.get('/feedback', async (req, res) => {
   res.json({ feedback });
 });
 
-type SurveyRow = { boughtUnused: string; categories: string[]; categoryOther: string | null; wouldBorrow: string; barriers: string[]; noDepositHelps: string; wouldLend: string; email: string | null; createdAt: Date };
-/** Answer counts per question (all time), for the admin survey summary and the pitch deck. */
-const summarizeSurvey = (rows: SurveyRow[]) => {
-  const count = (key: keyof typeof SURVEY, values: (r: SurveyRow) => string[]) =>
-    SURVEY[key].map((value) => ({ value, count: rows.filter((r) => values(r).includes(value)).length }));
-  return {
-    total: rows.length,
-    withEmail: rows.filter((r) => r.email).length,
-    questions: {
-      boughtUnused: count('boughtUnused', (r) => [r.boughtUnused]),
-      categories: count('categories', (r) => r.categories),
-      wouldBorrow: count('wouldBorrow', (r) => [r.wouldBorrow]),
-      barriers: count('barriers', (r) => r.barriers),
-      noDepositHelps: count('noDepositHelps', (r) => [r.noDepositHelps]),
-      wouldLend: count('wouldLend', (r) => [r.wouldLend]),
-    },
-    otherCategories: rows.filter((r) => r.categoryOther).slice(0, 50).map((r) => r.categoryOther as string),
-    entries: rows.slice(0, 1000).map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
-  };
-};
-
 const insightsQuery = z.object({ days: z.coerce.number().int().min(1).max(365).default(30) });
 
 /** Launch insights: anonymous funnel counters, searches (incl. zero results), waitlist and demand. */
@@ -155,7 +133,7 @@ router.get('/insights', async (req, res) => {
   const { days } = parseQuery(insightsQuery, req);
   const since = new Date(`${addDaysToDate(todayLocal(), -(days - 1))}T00:00:00Z`);
   const sinceInstant = zonedToUtc(addDaysToDate(todayLocal(), -(days - 1)));
-  const [totals, daily, searches, zero, waitlistByRole, waitlist, demand, surveys] = await Promise.all([
+  const [totals, daily, searches, zero, waitlistByRole, waitlist, demand] = await Promise.all([
     prisma.eventCount.groupBy({ by: ['name'], where: { day: { gte: since } }, _sum: { count: true } }),
     prisma.eventCount.findMany({ where: { day: { gte: since } }, orderBy: { day: 'desc' } }),
     prisma.searchLog.groupBy({
@@ -176,7 +154,6 @@ router.get('/insights', async (req, res) => {
     prisma.waitlistSignup.groupBy({ by: ['role'], _count: { _all: true } }),
     prisma.waitlistSignup.findMany({ orderBy: { createdAt: 'desc' }, take: 500 }),
     prisma.demandRequest.findMany({ orderBy: { createdAt: 'desc' }, take: 300 }),
-    prisma.surveyResponse.findMany({ orderBy: { createdAt: 'desc' }, take: 5000 }),
   ]);
   const sum = Object.fromEntries(totals.map((t) => [t.name, t._sum.count ?? 0]));
   res.json({
@@ -187,7 +164,6 @@ router.get('/insights', async (req, res) => {
     zeroResultSearches: zero.map((s) => ({ query: s.query, count: s._count._all })),
     waitlist: { byRole: Object.fromEntries(waitlistByRole.map((w) => [w.role, w._count._all])), entries: waitlist },
     demand,
-    survey: summarizeSurvey(surveys),
   });
 });
 

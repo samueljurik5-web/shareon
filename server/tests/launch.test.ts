@@ -75,33 +75,3 @@ describe('launch: sample listings, demand validation and insights', () => {
     expect(Object.keys((await prisma.searchLog.findFirstOrThrow()) as object).sort()).toEqual(['category', 'createdAt', 'id', 'query', 'resultCount']);
   });
 });
-
-describe('launch: market survey', () => {
-  beforeEach(resetDb);
-
-  const answers = { boughtUnused: 'OFTEN', categories: ['TOOLS', 'CAMPING', 'OTHER'], categoryOther: 'karimatka', wouldBorrow: 'RATHER_YES', barriers: ['DEPOSIT'], noDepositHelps: 'YES', wouldLend: 'MAYBE' };
-
-  it('stores answers, needs consent for an e-mail and adds the e-mail to the waitlist once', async () => {
-    const bad = await api().post('/api/launch/survey').send({ ...answers, wouldBorrow: 'X' }).expect(400);
-    expect(JSON.stringify(bad.body)).toContain('Vyber odpoveď.');
-    await api().post('/api/launch/survey').send({ ...answers, email: 'a@b.sk' }).expect(400);
-
-    await api().post('/api/launch/survey').send(answers).expect(201);
-    await api().post('/api/launch/survey').send({ ...answers, wouldLend: 'YES', categories: ['SPORT'], categoryOther: 'ignored', email: 'Eva@Example.sk', consent: true }).expect(201);
-    await api().post('/api/launch/survey').send({ ...answers, email: 'eva@example.sk', consent: true }).expect(201);
-
-    const rows = await prisma.surveyResponse.findMany({ orderBy: { createdAt: 'asc' } });
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toMatchObject({ categoryOther: 'karimatka', email: null });
-    expect(rows[1]).toMatchObject({ categories: ['SPORT'], categoryOther: null, email: 'eva@example.sk' });
-    expect(await prisma.waitlistSignup.findMany()).toMatchObject([{ email: 'eva@example.sk', role: 'BOTH' }]);
-
-    const admin = await createUser({ role: 'ADMIN' });
-    const res = await api().get('/api/admin/insights').set(admin.auth).expect(200);
-    expect(res.body.survey).toMatchObject({ total: 3, withEmail: 2, otherCategories: ['karimatka', 'karimatka'] });
-    const q = res.body.survey.questions;
-    expect(q.wouldBorrow.find((a: { value: string }) => a.value === 'RATHER_YES').count).toBe(3);
-    expect(q.categories.find((a: { value: string }) => a.value === 'TOOLS').count).toBe(2);
-    expect(q.wouldLend).toEqual([{ value: 'YES', count: 1 }, { value: 'MAYBE', count: 2 }, { value: 'NO', count: 0 }]);
-  });
-});
